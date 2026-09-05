@@ -1,0 +1,49 @@
+name: Build and test
+on:
+  workflow_call:
+    inputs:
+      version:
+        type: string
+        default: '1.0.0'
+permissions:
+  contents: read
+jobs:
+  test:
+    name: Tests (${{ matrix.runner }})
+    strategy:
+      fail-fast: false
+      matrix:
+        runner: [macos-15, macos-15-intel]
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - name: Toolchain
+        run: swift --version && xcodebuild -version
+      - name: Build and test
+        run: swift test
+  package:
+    name: Universal installable app
+    needs: test
+    runs-on: macos-15
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - name: Build DMG and app ZIP
+        env:
+          VERSION: ${{ inputs.version }}
+        run: ./scripts/package.sh
+      - name: Verify installable artifacts
+        env:
+          VERSION: ${{ inputs.version }}
+        run: ./scripts/verify-package.sh
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: ActivityMonitor-universal
+          if-no-files-found: error
+          retention-days: 30
+          path: |
+            dist/*.dmg
+            dist/*.zip
+            dist/SHA256SUMS
+            INSTALL.md
