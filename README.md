@@ -2,6 +2,18 @@
 
 A native SwiftUI activity monitor inspired by the supplied five-view design. Runs on macOS 14 or later, on Apple silicon and Intel. Uses live system data, native SwiftUI Canvas charts, public Darwin/IOKit APIs, and the bundled macOS network accounting tool. No third-party dependencies, web view, administrator daemon, or telemetry.
 
+## Screenshots
+
+Actual running app with live system data and the process inspector.
+
+### Light appearance
+
+![Activity Monitor in light appearance](docs/screenshots/light.jpg)
+
+### Dark appearance
+
+![Activity Monitor in dark appearance](docs/screenshots/dark.jpg)
+
 ## Install
 
 Open `dist/ActivityMonitor-1.0.0-universal.dmg` and drag **Activity Monitor** to **Applications**. A ZIP and the standalone `.app` are also in `dist/`. This app has its own bundle identifier and does not replace Apple's system utility.
