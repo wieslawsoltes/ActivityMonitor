@@ -11,4 +11,3 @@ Disk totals are process-lifetime counters, not whole-device totals. Throughput e
 Apple's proprietary per-process Energy Impact, 12-hour power, App Nap, GPU usage, and per-process packet counts are not implemented or fabricated. Sampling and open-file inspection may be denied for protected processes. This app does not elevate privileges or bypass macOS protections.
 
 Exports and reports are written only to a user-chosen local location. `sample` may also create its standard temporary report under `/tmp`. No monitoring data is transmitted.
-
