@@ -41,29 +41,76 @@ struct DesignCard<Content: View>: View {
     ).shadow(color: .black.opacity(theme.dark ? 0.06 : 0.025), radius: 2, y: 1)
   }
 }
+private enum ControlSurfaceKind { case segment, icon, action, danger }
+
+private struct ControlSurface: ViewModifier {
+  let theme: MonitorTheme
+  let kind: ControlSurfaceKind
+  var active = false
+  var pressed = false
+  var radius: CGFloat = 8
+  @Environment(\.isEnabled) private var enabled
+  @Environment(\.accessibilityReduceMotion) private var reduceMotion
+  @State private var hovering = false
+  private var highlighted: Bool { enabled && (hovering || pressed) }
+  private var foreground: Color {
+    if kind == .danger { return highlighted ? .white : theme.coral }
+    return kind == .action || active || highlighted ? theme.text : theme.secondary
+  }
+  private var background: Color {
+    switch kind {
+    case .danger: return highlighted ? theme.coral : theme.coral.opacity(0.08)
+    case .icon: return active || highlighted ? theme.recessed : .clear
+    case .action: return highlighted ? theme.hover : .clear
+    case .segment:
+      return pressed && enabled
+        ? theme.recessed : active ? theme.card : highlighted ? theme.hover : .clear
+    }
+  }
+  func body(content: Content) -> some View {
+    content.foregroundStyle(foreground)
+      .background(background, in: RoundedRectangle(cornerRadius: radius))
+      .overlay {
+        if kind == .action {
+          RoundedRectangle(cornerRadius: radius).stroke(theme.border, lineWidth: 1)
+        }
+      }
+      .shadow(color: .black.opacity(kind == .segment && active ? 0.06 : 0), radius: 2, y: 1)
+      .contentShape(Rectangle()).opacity(enabled ? 1 : 0.4)
+      .onHover { hovering = enabled && $0 }
+      .animation(reduceMotion ? nil : .easeOut(duration: 0.12), value: hovering)
+  }
+}
+
+struct MonitorSegmentButton: ButtonStyle {
+  let theme: MonitorTheme
+  var active = false
+  var radius: CGFloat = 8
+  func makeBody(configuration: Configuration) -> some View {
+    configuration.label.modifier(
+      ControlSurface(
+        theme: theme, kind: .segment, active: active,
+        pressed: configuration.isPressed, radius: radius))
+  }
+}
 struct MonitorIconButton: ButtonStyle {
   let theme: MonitorTheme
   var active = false
   func makeBody(configuration: Configuration) -> some View {
-    configuration.label.font(.system(size: 14, weight: .regular)).foregroundStyle(
-      active ? theme.text : theme.secondary
-    ).frame(width: 32, height: 32).background(
-      active || configuration.isPressed ? theme.recessed : Color.clear,
-      in: RoundedRectangle(cornerRadius: 8)
-    ).contentShape(Rectangle())
+    configuration.label.font(.system(size: 14)).frame(width: 32, height: 32)
+      .modifier(
+        ControlSurface(theme: theme, kind: .icon, active: active, pressed: configuration.isPressed))
   }
 }
 struct MonitorActionButton: ButtonStyle {
   let theme: MonitorTheme
   var danger = false
   func makeBody(configuration: Configuration) -> some View {
-    configuration.label.font(.system(size: 11, weight: .medium)).foregroundStyle(
-      danger ? theme.coral : theme.text
-    ).frame(maxWidth: .infinity).frame(height: 33).background(
-      configuration.isPressed ? theme.hover : danger ? theme.coral.opacity(0.08) : Color.clear,
-      in: RoundedRectangle(cornerRadius: 8)
-    ).overlay(RoundedRectangle(cornerRadius: 8).stroke(theme.border, lineWidth: 1))
-      .contentShape(Rectangle())
+    configuration.label.font(.system(size: 11, weight: .medium))
+      .frame(maxWidth: .infinity).frame(height: 33)
+      .modifier(
+        ControlSurface(
+          theme: theme, kind: danger ? .danger : .action, pressed: configuration.isPressed))
   }
 }
 struct BrandMark: View {
