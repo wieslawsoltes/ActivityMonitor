@@ -1,8 +1,8 @@
-Activity Monitor 1.0 — macOS 14 or later, Apple silicon and Intel
+Activity Monitor — macOS 14 or later, Apple silicon and Intel
 
 Open the disk image and drag Activity Monitor into Applications. Open your installed copy from Applications. This app is separate from Apple's built-in Activity Monitor.
 
-This local build is ad-hoc signed, not Apple notarized. macOS may block a copy downloaded from the internet. After attempting to open it, use System Settings → Privacy & Security → Open Anyway only if you trust the source. No administrator helper is installed, and no security setting needs to be disabled.
+Check the signing status provided with your download. Developer ID-signed and notarized releases can be opened normally. macOS may block an ad-hoc-signed copy downloaded from the internet. After attempting to open it, use System Settings → Privacy & Security → Open Anyway only if you trust the source. No administrator helper is installed, and no security setting needs to be disabled.
 
 To uninstall, quit the app and move it from Applications to the Trash.
 

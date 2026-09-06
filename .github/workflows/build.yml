@@ -20,6 +20,8 @@ jobs:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       - name: Toolchain
         run: swift --version && xcodebuild -version
+      - name: Packaging failure-gate tests
+        run: python3 -m unittest discover -s Tests/Packaging -v
       - name: Build and test
         run: swift test
   package:
@@ -46,4 +48,4 @@ jobs:
             dist/*.dmg
             dist/*.zip
             dist/SHA256SUMS
-            INSTALL.md
+            dist/INSTALL.md
