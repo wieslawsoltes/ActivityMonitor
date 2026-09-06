@@ -26,50 +26,18 @@ struct ContentView: View {
   @AppStorage("showTime") var showTime = true
   @State var hoverDate: Date?
   var selected: ProcessRow? { monitor.rows.first { $0.id == selection } }
-  var filtered: [ProcessRow] {
-    monitor.rows.filter { p in
-      (query.isEmpty || p.name.localizedCaseInsensitiveContains(query)
-        || p.user.localizedCaseInsensitiveContains(query) || String(p.id).contains(query))
-        && (filter == "All processes" || filter == "My processes" && p.uid == getuid()
-          || filter == "System processes" && p.uid == 0 || filter == "Applications" && p.isApp)
-    }.sorted { a, b in
-      if a.id == b.id { return false }
-      let result: Bool
-      switch sort {
-      case "name":
-        let comparison = a.name.localizedStandardCompare(b.name)
-        result = comparison == .orderedSame ? a.id < b.id : comparison == .orderedAscending
-      case "received":
-        result =
-          (a.networkReceived ?? 0) == (b.networkReceived ?? 0)
-          ? a.id < b.id : (a.networkReceived ?? 0) < (b.networkReceived ?? 0)
-      case "sent":
-        result =
-          (a.networkSent ?? 0) == (b.networkSent ?? 0)
-          ? a.id < b.id : (a.networkSent ?? 0) < (b.networkSent ?? 0)
-      case "kind": result = a.kind == b.kind ? a.id < b.id : a.kind < b.kind
-      case "pid": result = a.id < b.id
-      case "user": result = a.user == b.user ? a.id < b.id : a.user < b.user
-      case "threads": result = a.threads == b.threads ? a.id < b.id : a.threads < b.threads
-      case "cpu": result = a.cpu == b.cpu ? a.id < b.id : a.cpu < b.cpu
-      case "resident": result = a.resident == b.resident ? a.id < b.id : a.resident < b.resident
-      case "memory": result = a.memory == b.memory ? a.id < b.id : a.memory < b.memory
-      case "time": result = a.cpuTime == b.cpuTime ? a.id < b.id : a.cpuTime < b.cpuTime
-      case "secondary": result = a.read == b.read ? a.id < b.id : a.read < b.read
-      default:
-        let av = value(a)
-        let bv = value(b)
-        result = av == bv ? a.id < b.id : av < bv
-      }
-      return descending ? !result : result
-    }
+  @State private var filtered: [ProcessRow] = []
+  private func refreshPresentation(_ rows: [ProcessRow]? = nil) {
+    filtered = processQuery.apply(rows ?? monitor.rows)
   }
-  func value(_ p: ProcessRow) -> Double {
-    switch metric {
-    case .memory: return Double(p.memory)
-    case .disk: return Double(p.written)
-    default: return p.cpu
-    }
+  private var processQuery: ProcessQuery {
+    ProcessQuery(metric: metric, query: query, filter: filter, sort: sort, descending: descending)
+  }
+  private func selectMetric(_ value: Metric) {
+    metric = value
+    sort = value == .network ? "received" : "primary"
+    descending = true
+    filter = value == .energy ? "Applications" : "All processes"
   }
   var theme: MonitorTheme {
     MonitorTheme(dark: appearance == "Dark" || appearance == "System" && colorScheme == .dark)
@@ -119,11 +87,10 @@ struct ContentView: View {
     }.background(theme.window).foregroundStyle(theme.text).font(.system(size: 12)).frame(
       minWidth: 1120, minHeight: 700
     ).ignoresSafeArea(.container, edges: .top)
-      .onChange(of: metric) {
-        sort = metric == .network ? "received" : "primary"
-        descending = true
-        filter = metric == .energy ? "Applications" : "All processes"
+      .onReceive(monitor.$rows) { rows in
+        refreshPresentation(rows)
       }
+      .onChange(of: processQuery) { refreshPresentation() }
       .preferredColorScheme(appearance == "Dark" ? .dark : appearance == "Light" ? .light : nil)
       .alert(
         "Stop \(stopTarget?.name ?? "process")?",
@@ -154,7 +121,7 @@ struct ContentView: View {
       .sheet(isPresented: $showGallery) {
         DesignGallery(
           select: { view, style in
-            metric = view
+            selectMetric(view)
             appearance = style
             showGallery = false
           }, close: { showGallery = false }
@@ -192,7 +159,7 @@ struct ContentView: View {
         Group {
           Button("") { searchFocused = true }.keyboardShortcut("k")
           ForEach(Array(Metric.allCases.enumerated()), id: \.offset) { index, item in
-            Button("") { metric = item }.keyboardShortcut(
+            Button("") { selectMetric(item) }.keyboardShortcut(
               KeyEquivalent(Character(String(index + 1))))
           }
         }.hidden()
@@ -256,7 +223,7 @@ struct ContentView: View {
       HStack(spacing: 3) {
         ForEach(Metric.allCases) { item in
           Button {
-            metric = item
+            selectMetric(item)
           } label: {
             HStack(spacing: 7) {
               Image(systemName: item.icon).font(.system(size: 13)).foregroundStyle(

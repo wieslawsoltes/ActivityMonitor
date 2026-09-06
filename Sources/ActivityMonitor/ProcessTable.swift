@@ -1,7 +1,7 @@
 import AppKit
 import SwiftUI
 
-struct ProcessColumn: Identifiable {
+struct ProcessColumn: Identifiable, Equatable {
   let id: String
   let title: String
   let weight: CGFloat
@@ -22,7 +22,6 @@ struct MonitorProcessTable: View {
   @AppStorage("showThreads") var showThreads = true
   @AppStorage("showUser") var showUser = true
   @AppStorage("showTime") var showTime = true
-  @State var hovered: Int32?
   @FocusState var focused: Bool
   var columns: [ProcessColumn] {
     var values: [ProcessColumn]
@@ -91,7 +90,14 @@ struct MonitorProcessTable: View {
               ScrollView(.vertical) {
                 LazyVStack(spacing: 0) {
                   ForEach(Array(rows.enumerated()), id: \.element.id) { index, row in
-                    rowView(row, index, width).id(row.id)
+                    ProcessTableRow(
+                      row: row, index: index, width: width, metric: metric, theme: theme,
+                      columns: columns, isSelected: selection == row.id,
+                      select: {
+                        selection = row.id
+                        focused = true
+                      }, inspect: inspect, stop: stop
+                    ).equatable().id(row.id)
                   }
                   if rows.isEmpty { ContentUnavailableView.search(text: query).frame(height: 240) }
                 }
@@ -242,27 +248,59 @@ struct MonitorProcessTable: View {
         ? "This metric is not exposed by public macOS APIs." : "Sort by \(title)"
     ).disabled(unavailableColumn(key))
   }
-  func rowView(_ row: ProcessRow, _ index: Int, _ width: CGFloat) -> some View {
+  func unavailableColumn(_ key: String) -> Bool {
+    ["gpu", "ports", "nap", "sleep", "packetsIn", "packetsOut"].contains(key)
+  }
+  func move(_ delta: Int) {
+    guard !rows.isEmpty else { return }
+    let index = rows.firstIndex { $0.id == selection } ?? (delta > 0 ? -1 : rows.count)
+    selection = rows[min(max(index + delta, 0), rows.count - 1)].id
+  }
+}
+
+private struct ProcessTableRow: View, Equatable {
+  let row: ProcessRow
+  let index: Int
+  let width: CGFloat
+  let metric: Metric
+  let theme: MonitorTheme
+  let columns: [ProcessColumn]
+  let isSelected: Bool
+  let select: () -> Void
+  let inspect: (ProcessRow) -> Void
+  let stop: (ProcessRow) -> Void
+  @State private var hovered = false
+  static func == (lhs: Self, rhs: Self) -> Bool {
+    lhs.row == rhs.row && lhs.index == rhs.index && lhs.width == rhs.width
+      && lhs.metric == rhs.metric && lhs.theme.dark == rhs.theme.dark
+      && lhs.columns == rhs.columns && lhs.isSelected == rhs.isSelected
+  }
+  func nameWidth(_ width: CGFloat) -> CGFloat {
+    metric == .disk ? width * 0.39 : metric == .energy ? width * 0.30 : width * 0.27
+  }
+  func cellWidth(_ column: ProcessColumn, _ width: CGFloat) -> CGFloat {
+    (width - nameWidth(width)) * column.weight / columns.reduce(0) { $0 + $1.weight }
+  }
+  var body: some View {
     Button {
-      selection = row.id
-      focused = true
+      select()
     } label: {
       HStack(spacing: 0) {
         HStack(spacing: 10) {
-          ProcessIcon(pid: row.id, isApp: row.isApp).frame(width: 24, height: 24)
+          ProcessIcon(pid: row.id, isApp: row.isApp, start: row.start).frame(width: 24, height: 24)
           Text(row.name).font(.system(size: 12)).foregroundStyle(theme.text).lineLimit(1)
             .truncationMode(.middle)
         }.padding(.horizontal, 17).frame(width: nameWidth(width), alignment: .leading)
         ForEach(columns) { c in cell(row, c).frame(width: cellWidth(c, width)) }
       }.frame(height: 41).background(
-        selection == row.id
+        isSelected
           ? theme.selected
-          : hovered == row.id ? theme.hover : index % 2 == 1 ? theme.stripe : Color.clear
+          : hovered ? theme.hover : index % 2 == 1 ? theme.stripe : Color.clear
       ).overlay(alignment: .leading) {
-        if selection == row.id { Rectangle().fill(theme.blue).frame(width: 2) }
+        if isSelected { Rectangle().fill(theme.blue).frame(width: 2) }
       }.overlay(alignment: .bottom) { Rectangle().fill(theme.separator).frame(height: 1) }
         .contentShape(Rectangle())
-    }.buttonStyle(.plain).focusEffectDisabled().onHover { hovered = $0 ? row.id : nil }
+    }.buttonStyle(.plain).focusEffectDisabled().onHover { hovered = $0 }
       .simultaneousGesture(TapGesture(count: 2).onEnded { inspect(row) }).contextMenu {
         Button("Inspect") { inspect(row) }
         Button("Copy PID") {
@@ -309,13 +347,5 @@ struct MonitorProcessTable: View {
     case "user": return p.user
     default: return "—"
     }
-  }
-  func unavailableColumn(_ key: String) -> Bool {
-    ["gpu", "ports", "nap", "sleep", "packetsIn", "packetsOut"].contains(key)
-  }
-  func move(_ delta: Int) {
-    guard !rows.isEmpty else { return }
-    let index = rows.firstIndex { $0.id == selection } ?? (delta > 0 ? -1 : rows.count)
-    selection = rows[min(max(index + delta, 0), rows.count - 1)].id
   }
 }

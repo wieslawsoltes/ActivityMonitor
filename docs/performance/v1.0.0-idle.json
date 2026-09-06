@@ -1,0 +1,8 @@
+{
+  "pid": 75045,
+  "seconds": 30.019768167010625,
+  "cpu_percent": 3.6642521483853705,
+  "rss_start_kib": 140736,
+  "rss_end_kib": 141040,
+  "scenario": "v1.0.0 current visible view, no interaction, 30 seconds"
+}
