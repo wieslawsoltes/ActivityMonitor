@@ -15,7 +15,7 @@ Keep an eye on performance, understand resource usage, and find the processes th
 
 </div>
 
-![Activity Monitor in light appearance](docs/screenshots/light.jpg)
+![Activity Monitor in light appearance](docs/screenshots/v1.1/cpu-light.jpg)
 
 ## Five views. One clear picture.
 
@@ -40,9 +40,15 @@ Keep an eye on performance, understand resource usage, and find the processes th
 
 Choose light, dark or system appearance. A compact inspector keeps process details alongside the table, while the overview remains visible as you scroll.
 
-![Activity Monitor in dark appearance](docs/screenshots/dark.jpg)
+![Activity Monitor in dark appearance](docs/screenshots/v1.1/cpu-dark.jpg)
 
-*Screenshots show the running app with live system data.*
+*Screenshots show the running app with real system data.*
+
+[Explore all five views in both themes](docs/screenshots/README.md).
+
+## Smoother everyday monitoring
+
+Tabs respond across their full bounds. Clear hover, press and search-focus feedback makes controls easier to use, while a lighter process table reduces the work needed to switch views. Sampling stays at the same frequency. See the [profiling results](docs/performance/README.md).
 
 ## Installation
 

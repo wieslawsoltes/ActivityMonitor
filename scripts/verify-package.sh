@@ -1,13 +1,14 @@
 #!/bin/bash
 set -euo pipefail
 cd "$(dirname "$0")/.."
-VERSION="${VERSION:-1.0.0}"
+VERSION="${VERSION:-1.1.0}"
 APP='dist/Activity Monitor.app'
 for ARCH in arm64 x86_64; do
   lipo "$APP/Contents/MacOS/ActivityMonitor" -verify_arch "$ARCH"
 done
 codesign --verify --deep --strict "$APP"
 [[ "$(/usr/libexec/PlistBuddy -c 'Print CFBundleShortVersionString' "$APP/Contents/Info.plist")" == "$VERSION" ]]
+[[ "$(/usr/libexec/PlistBuddy -c 'Print CFBundleVersion' "$APP/Contents/Info.plist")" == "$VERSION" ]]
 (cd dist && shasum -a 256 -c SHA256SUMS)
 hdiutil verify "dist/ActivityMonitor-$VERSION-universal.dmg"
 STAGE="$(mktemp -d)"
