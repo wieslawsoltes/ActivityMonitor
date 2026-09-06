@@ -21,7 +21,7 @@ NOTARY_PROFILE="your-existing-notary-profile" \
 ./scripts/package.sh
 ```
 
-The optional path signs with hardened runtime, submits the DMG and staples its ticket. It requires your own Apple credentials; none are stored in this repository. The ZIP is an alternative archive of the signed app; the script's stapled artifact is the DMG.
+The optional path signs with hardened runtime and a secure timestamp, notarizes and staples the app, then builds the final ZIP and DMG. It signs, notarizes and staples the DMG too. Both downloads contain the stapled app. Set `EXPECT_NOTARIZED=1` when running `scripts/verify-package.sh` to check tickets and Gatekeeper acceptance. Credentials are never stored in this repository.
 
 ## Structure
 
@@ -43,4 +43,4 @@ GitHub Actions builds and runs the test suite on the latest macOS Apple silicon 
 
 To release, first wait for green CI on the intended commit, then push a version tag such as `v1.0.1`. The release workflow validates the tag, repeats both architecture tests, builds versioned installers, verifies their contents and signatures, and publishes a GitHub release only after all checks succeed. It attaches the DMG, ZIP containing the full app bundle, portable SHA-256 checksums and installation notes. Failed builds do not publish a release.
 
-Hosted builds use ad-hoc signing without credentials. Developer ID/notarization remains available through the local packaging script. Release publication needs only the workflow's scoped GitHub token; pull-request builds have read-only repository permissions.
+Pull-request builds use ad-hoc signing without Apple credentials. Tagged releases can use the protected `apple-signing` environment for Developer ID signing and notarization; see [Apple signing setup](docs/APPLE_SIGNING.md). Once enabled, signing, notarization or Gatekeeper failures prevent publication. The publishing job uses only its scoped GitHub token.

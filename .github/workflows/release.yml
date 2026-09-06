@@ -24,8 +24,76 @@ jobs:
     uses: ./.github/workflows/build.yml
     with:
       version: ${{ needs.version.outputs.version }}
-  publish:
+  sign:
+    name: Developer ID signing and notarization
+    if: ${{ vars.APPLE_SIGNING_ENABLED == 'true' }}
     needs: [version, build]
+    runs-on: macos-latest
+    environment: apple-signing
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Require a release commit from main
+        run: git merge-base --is-ancestor "$GITHUB_SHA" origin/main
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: ActivityMonitor-universal
+          path: dist
+      - name: Verify the tested app before loading credentials
+        env:
+          VERSION: ${{ needs.version.outputs.version }}
+        run: |
+          ditto -x -k "dist/ActivityMonitor-$VERSION-universal.zip" dist
+          ./scripts/verify-package.sh
+      - name: Import signing credentials into a temporary keychain
+        env:
+          DEVELOPER_ID_P12_BASE64: ${{ secrets.DEVELOPER_ID_P12_BASE64 }}
+          DEVELOPER_ID_P12_PASSWORD: ${{ secrets.DEVELOPER_ID_P12_PASSWORD }}
+          DEVELOPER_ID_IDENTITY: ${{ secrets.DEVELOPER_ID_IDENTITY }}
+          APP_STORE_CONNECT_KEY_P8: ${{ secrets.APP_STORE_CONNECT_KEY_P8 }}
+          APP_STORE_CONNECT_KEY_ID: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
+          APP_STORE_CONNECT_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
+        run: ./scripts/setup-apple-signing.sh
+      - name: Sign and notarize the tested app
+        env:
+          VERSION: ${{ needs.version.outputs.version }}
+          USE_PREBUILT_APP: '1'
+        run: ./scripts/package.sh
+      - name: Verify notarization and Gatekeeper acceptance
+        env:
+          VERSION: ${{ needs.version.outputs.version }}
+          EXPECT_NOTARIZED: '1'
+        run: ./scripts/verify-package.sh
+      - name: Remove signing credentials
+        if: ${{ always() }}
+        run: ./scripts/cleanup-apple-signing.sh
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: ActivityMonitor-notarized
+          if-no-files-found: error
+          retention-days: 30
+          path: |
+            dist/*.dmg
+            dist/*.zip
+            dist/SHA256SUMS
+            dist/INSTALL.md
+      - name: Preserve notarization diagnostics on failure
+        if: ${{ failure() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: notarization-diagnostics
+          if-no-files-found: ignore
+          retention-days: 7
+          path: dist/*notary*.json
+  publish:
+    needs: [version, build, sign]
+    if: >-
+      ${{ !cancelled() && needs.version.result == 'success' && needs.build.result == 'success' &&
+          (needs.sign.result == 'success' ||
+           (needs.sign.result == 'skipped' && vars.APPLE_SIGNING_ENABLED != 'true')) }}
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -33,8 +101,8 @@ jobs:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
-          name: ActivityMonitor-universal
-          path: release
+          name: ${{ needs.sign.result == 'success' && 'ActivityMonitor-notarized' || 'ActivityMonitor-universal' }}
+          path: release/dist
       - name: Check downloaded artifacts
         working-directory: release/dist
         run: sha256sum -c SHA256SUMS
@@ -42,9 +110,18 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ github.ref_name }}
+          NOTARIZED: ${{ needs.sign.result == 'success' }}
         run: |
-          if ! gh release view "$TAG" >/dev/null 2>&1; then
-            gh release create "$TAG" --verify-tag --draft --title "Activity Monitor ${TAG#v}" --notes-file .github/RELEASE_NOTES.md
+          cp .github/RELEASE_NOTES.md "$RUNNER_TEMP/release-notes.md"
+          if [[ "$NOTARIZED" == true ]]; then
+            printf '\nThis release is **Developer ID-signed and Apple notarized**. Both the DMG and the app inside the ZIP include notarization tickets.\n' >> "$RUNNER_TEMP/release-notes.md"
+          else
+            printf '\nThis release is **ad-hoc signed, not Apple notarized**. See INSTALL.md for first-launch instructions.\n' >> "$RUNNER_TEMP/release-notes.md"
           fi
-          gh release upload "$TAG" release/dist/*.dmg release/dist/*.zip release/dist/SHA256SUMS release/INSTALL.md --clobber
-          gh release edit "$TAG" --draft=false
+          if RELEASE_DRAFT="$(gh release view "$TAG" --json isDraft --jq .isDraft 2>/dev/null)"; then
+            [[ "$RELEASE_DRAFT" == true ]] || { echo 'This version is already published; use a new version tag.' >&2; exit 1; }
+          else
+            gh release create "$TAG" --verify-tag --draft --title "Activity Monitor ${TAG#v}" --notes-file "$RUNNER_TEMP/release-notes.md"
+          fi
+          gh release upload "$TAG" release/dist/*.dmg release/dist/*.zip release/dist/SHA256SUMS release/dist/INSTALL.md --clobber
+          gh release edit "$TAG" --notes-file "$RUNNER_TEMP/release-notes.md" --draft=false
