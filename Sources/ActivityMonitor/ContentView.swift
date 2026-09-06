@@ -26,8 +26,12 @@ struct ContentView: View {
   @AppStorage("showTime") var showTime = true
   @State var hoverDate: Date?
   var selected: ProcessRow? { monitor.rows.first { $0.id == selection } }
-  var filtered: [ProcessRow] {
-    monitor.rows.filter { p in
+  @State private var filtered: [ProcessRow] = []
+  private func refreshPresentation(_ rows: [ProcessRow]? = nil) {
+    filtered = sortedProcesses(rows ?? monitor.rows)
+  }
+  func sortedProcesses(_ rows: [ProcessRow]) -> [ProcessRow] {
+    rows.filter { p in
       (query.isEmpty || p.name.localizedCaseInsensitiveContains(query)
         || p.user.localizedCaseInsensitiveContains(query) || String(p.id).contains(query))
         && (filter == "All processes" || filter == "My processes" && p.uid == getuid()
@@ -119,10 +123,18 @@ struct ContentView: View {
     }.background(theme.window).foregroundStyle(theme.text).font(.system(size: 12)).frame(
       minWidth: 1120, minHeight: 700
     ).ignoresSafeArea(.container, edges: .top)
+      .onReceive(monitor.$rows) { rows in
+        refreshPresentation(rows)
+      }
+      .onChange(of: query) { refreshPresentation() }
+      .onChange(of: filter) { refreshPresentation() }
+      .onChange(of: sort) { refreshPresentation() }
+      .onChange(of: descending) { refreshPresentation() }
       .onChange(of: metric) {
         sort = metric == .network ? "received" : "primary"
         descending = true
         filter = metric == .energy ? "Applications" : "All processes"
+        refreshPresentation()
       }
       .preferredColorScheme(appearance == "Dark" ? .dark : appearance == "Light" ? .light : nil)
       .alert(

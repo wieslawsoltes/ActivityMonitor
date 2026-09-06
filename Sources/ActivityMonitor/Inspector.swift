@@ -24,7 +24,7 @@ struct MonitorInspector: View {
         if let p = process {
           VStack(alignment: .leading, spacing: 0) {
             HStack(spacing: 12) {
-              ProcessIcon(pid: p.id, isApp: p.isApp, size: 48)
+              ProcessIcon(pid: p.id, isApp: p.isApp, start: p.start, size: 48)
               VStack(alignment: .leading, spacing: 6) {
                 Text(p.name).font(.system(size: 13, weight: .semibold)).foregroundStyle(theme.text)
                   .fixedSize(horizontal: false, vertical: true)
@@ -121,10 +121,11 @@ struct MonitorInspector: View {
 struct ProcessIcon: View {
   let pid: Int32
   let isApp: Bool
+  var start: UInt64 = 0
   var size: CGFloat = 24
   var body: some View {
     Group {
-      if let icon = ProcessIconCache.icon(pid: pid) {
+      if let icon = ProcessIconCache.icon(pid: pid, start: start, isApp: isApp) {
         Image(nsImage: icon).resizable().interpolation(.high)
       } else {
         Image(systemName: isApp ? "app.fill" : pid < 1000 ? "cpu" : "terminal.fill").resizable()
@@ -140,7 +141,19 @@ struct ProcessIcon: View {
 
 @MainActor enum ProcessIconCache {
   static let images = NSCache<NSString, NSImage>()
-  static func icon(pid: Int32) -> NSImage? {
+  private struct Entry {
+    let start: UInt64
+    let image: NSImage?
+  }
+  private static var processes: [Int32: Entry] = [:]
+  static func icon(pid: Int32, start: UInt64, isApp: Bool) -> NSImage? {
+    if let entry = processes[pid], entry.start == start { return entry.image }
+    let image = resolve(pid: pid, isApp: isApp)
+    if processes.count >= 4096 { processes.removeAll(keepingCapacity: true) }
+    processes[pid] = Entry(start: start, image: image)
+    return image
+  }
+  private static func resolve(pid: Int32, isApp: Bool) -> NSImage? {
     var buffer = [CChar](repeating: 0, count: 4096)
     if proc_pidpath(pid, &buffer, UInt32(buffer.count)) > 0 {
       let path = String(cString: buffer)
@@ -152,6 +165,6 @@ struct ProcessIcon: View {
         return image
       }
     }
-    return NSRunningApplication(processIdentifier: pid)?.icon
+    return isApp ? NSRunningApplication(processIdentifier: pid)?.icon : nil
   }
 }

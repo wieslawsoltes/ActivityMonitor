@@ -29,7 +29,7 @@ enum Metric: String, CaseIterable, Identifiable {
     }
   }
 }
-struct ProcessRow: Identifiable, Codable {
+struct ProcessRow: Identifiable, Codable, Equatable {
   var id: Int32
   var parent: Int32
   var uid: UInt32
@@ -75,6 +75,7 @@ final class Collector: @unchecked Sendable {
   var network: [Int32: (UInt64, ProcessNetworkCounters)] = [:]
   var networkDate = Date.distantPast
   var time = Date()
+  private var users: [UInt32: String] = [:]
   func collect() -> Snapshot {
     let now = Date()
     let elapsed = max(now.timeIntervalSince(time), 0.001)
@@ -104,7 +105,13 @@ final class Collector: @unchecked Sendable {
       let name = withUnsafePointer(to: &n) {
         $0.withMemoryRebound(to: CChar.self, capacity: 1024) { String(cString: $0) }
       }
-      let user = getpwuid(p.uid).map { String(cString: $0.pointee.pw_name) } ?? String(p.uid)
+      let user: String
+      if let cached = users[p.uid] {
+        user = cached
+      } else {
+        user = getpwuid(p.uid).map { String(cString: $0.pointee.pw_name) } ?? String(p.uid)
+        users[p.uid] = user
+      }
       let networkCounters = network[p.pid].flatMap { $0.0 == p.start ? $0.1 : nil }
       return ProcessRow(
         id: p.pid, parent: p.ppid, uid: p.uid, start: p.start, name: name, user: user, cpu: cpu,
@@ -138,6 +145,7 @@ final class Collector: @unchecked Sendable {
   @Published var packetSendRate = 0.0
   @Published var error: String?
   private let collector = Collector()
+  private let applications = ApplicationInventory()
   private var task: Task<Void, Never>?
   private var previous: AMSystem?
   private var previousDate: Date?
@@ -196,9 +204,7 @@ final class Collector: @unchecked Sendable {
     }
     readRate = Double(dr) / dt
     writeRate = Double(dw) / dt
-    let apps = Set(
-      NSWorkspace.shared.runningApplications.filter { $0.activationPolicy == .regular }.map(
-        \.processIdentifier))
+    let apps = applications.regularProcesses
     rows = snapshot.processes.map {
       var p = $0
       p.isApp = apps.contains(p.id)
@@ -287,4 +293,32 @@ var nativeKind: String {
   #else
     return "Intel"
   #endif
+}
+
+/// Application membership changes on workspace events, not on every metric sample.
+@MainActor private final class ApplicationInventory {
+  private(set) var regularProcesses: Set<Int32> = []
+  private var observers: [NSObjectProtocol] = []
+  init() {
+    refresh()
+    let center = NSWorkspace.shared.notificationCenter
+    for name in [
+      NSWorkspace.didLaunchApplicationNotification,
+      NSWorkspace.didTerminateApplicationNotification,
+      NSWorkspace.didActivateApplicationNotification,
+    ] {
+      observers.append(
+        center.addObserver(forName: name, object: nil, queue: .main) { [weak self] _ in
+          Task { @MainActor [weak self] in self?.refresh() }
+        })
+    }
+  }
+  private func refresh() {
+    regularProcesses = Set(
+      NSWorkspace.shared.runningApplications
+        .filter { $0.activationPolicy == .regular }.map(\.processIdentifier))
+  }
+  deinit {
+    for observer in observers { NSWorkspace.shared.notificationCenter.removeObserver(observer) }
+  }
 }
