@@ -4,6 +4,7 @@ struct DesignGallery: View {
   @EnvironmentObject var monitor: Monitor
   let select: (Metric, String) -> Void
   let close: () -> Void
+  @State private var previewRows: [ProcessRow] = []
   var body: some View {
     VStack(spacing: 0) {
       HStack {
@@ -33,6 +34,9 @@ struct DesignGallery: View {
         }.padding(28)
       }
     }.frame(width: 1080, height: 760)
+      .onReceive(monitor.$rows) { rows in
+        previewRows = Array(rows.sorted { $0.cpu > $1.cpu }.prefix(3))
+      }
   }
   func preview(_ metric: Metric, _ dark: Bool) -> some View {
     let theme = MonitorTheme(dark: dark)
@@ -54,7 +58,7 @@ struct DesignGallery: View {
             width: 460, height: 78, alignment: .topLeading)
           VStack(spacing: 0) {
             ForEach(
-              Array(monitor.rows.sorted { $0.cpu > $1.cpu }.prefix(3).enumerated()),
+              Array(previewRows.enumerated()),
               id: \.element.id
             ) { index, p in
               HStack {
@@ -67,16 +71,29 @@ struct DesignGallery: View {
             }
           }.clipShape(RoundedRectangle(cornerRadius: 5))
         }.padding(14).background(theme.window)
-        HStack {
-          Label(
-            metric.rawValue + " / " + (dark ? "Dark" : "Light"),
-            systemImage: dark ? "moon" : "sun.max")
-          Spacer()
-          Image(systemName: "arrow.right")
-        }.font(.system(size: 11)).foregroundStyle(theme.secondary).padding(12).background(
-          theme.card)
+        GalleryFooter(metric: metric, dark: dark, theme: theme)
+
       }.foregroundStyle(theme.text).clipShape(RoundedRectangle(cornerRadius: 12)).overlay(
         RoundedRectangle(cornerRadius: 12).stroke(theme.border, lineWidth: 1))
     }.buttonStyle(.plain)
+  }
+}
+
+private struct GalleryFooter: View {
+  let metric: Metric
+  let dark: Bool
+  let theme: MonitorTheme
+  @State private var hovering = false
+  @Environment(\.accessibilityReduceMotion) private var reduceMotion
+  var body: some View {
+    HStack {
+      Label(
+        metric.rawValue + " / " + (dark ? "Dark" : "Light"), systemImage: dark ? "moon" : "sun.max")
+      Spacer()
+      Image(systemName: "arrow.right")
+    }.font(.system(size: 11)).foregroundStyle(theme.secondary).padding(12)
+      .background(hovering ? theme.hover : theme.card)
+      .onHover { hovering = $0 }
+      .animation(reduceMotion ? nil : .easeOut(duration: 0.12), value: hovering)
   }
 }

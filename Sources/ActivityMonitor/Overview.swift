@@ -172,7 +172,7 @@ struct MonitorOverview: View {
             theme.tertiary)
         }
         HStack {
-          mini(monitor.rows.reduce(0) { $0 + Int($1.threads) }.formatted(), "Threads available")
+          mini(monitor.rows.reduce(0) { $0 + Int($1.threads) }.formatted(), "Threads")
           mini(monitor.rows.count.formatted(), "Processes")
         }
         HStack {

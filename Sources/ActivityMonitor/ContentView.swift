@@ -228,14 +228,11 @@ struct ContentView: View {
             HStack(spacing: 7) {
               Image(systemName: item.icon).font(.system(size: 13)).foregroundStyle(
                 item == metric ? theme.blue : theme.secondary)
-              Text(item.rawValue).font(.system(size: 13, weight: .medium)).foregroundStyle(
-                item == metric ? theme.text : theme.secondary)
-            }.padding(.horizontal, 15).frame(height: 34).background(
-              item == metric ? theme.card : Color.clear, in: RoundedRectangle(cornerRadius: 8)
-            ).shadow(color: .black.opacity(item == metric ? 0.07 : 0), radius: 2, y: 1)
-              .contentShape(Rectangle())
-          }.buttonStyle(.plain).accessibilityAddTraits(item == metric ? .isSelected : []).help(
-            "\(item.rawValue) · ⌘\(Metric.allCases.firstIndex(of:item)!+1)")
+              Text(item.rawValue).font(.system(size: 13, weight: .medium))
+            }.padding(.horizontal, 15).frame(height: 34)
+          }.buttonStyle(MonitorSegmentButton(theme: theme, active: item == metric))
+            .accessibilityAddTraits(item == metric ? .isSelected : []).help(
+              "\(item.rawValue) · ⌘\(Metric.allCases.firstIndex(of:item)!+1)")
         }
       }.padding(4).background(theme.recessed, in: RoundedRectangle(cornerRadius: 11)).overlay(
         RoundedRectangle(cornerRadius: 11).stroke(theme.separator, lineWidth: 1))
@@ -249,11 +246,10 @@ struct ContentView: View {
     } label: {
       Image(systemName: icon).font(.system(size: 13)).foregroundStyle(
         appearance == name ? theme.blue : theme.tertiary
-      ).frame(width: 28, height: 26).background(
-        appearance == name ? theme.card : Color.clear, in: RoundedRectangle(cornerRadius: 6)
-      ).shadow(color: .black.opacity(appearance == name ? 0.05 : 0), radius: 2, y: 1)
-        .contentShape(Rectangle())
-    }.buttonStyle(.plain).help("\(name) appearance").accessibilityLabel("\(name) appearance")
+      ).frame(width: 28, height: 26)
+    }.buttonStyle(MonitorSegmentButton(theme: theme, active: appearance == name, radius: 6)).help(
+      "\(name) appearance"
+    ).accessibilityLabel("\(name) appearance")
       .accessibilityAddTraits(appearance == name ? .isSelected : [])
   }
   var sectionHeading: some View {
@@ -277,13 +273,9 @@ struct ContentView: View {
           Button {
             range = value
           } label: {
-            Text("\(value) min").font(.system(size: 10)).foregroundStyle(
-              range == value ? theme.text : theme.secondary
-            ).frame(width: 44, height: 24).background(
-              range == value ? theme.card : Color.clear, in: RoundedRectangle(cornerRadius: 5)
-            ).shadow(color: .black.opacity(range == value ? 0.06 : 0), radius: 2, y: 1)
-              .contentShape(Rectangle())
-          }.buttonStyle(.plain)
+            Text("\(value) min").font(.system(size: 10)).frame(width: 44, height: 24)
+          }.buttonStyle(MonitorSegmentButton(theme: theme, active: range == value, radius: 5))
+            .accessibilityAddTraits(range == value ? .isSelected : [])
         }
       }.padding(3).overlay(RoundedRectangle(cornerRadius: 8).stroke(theme.border, lineWidth: 1))
     }

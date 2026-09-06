@@ -172,7 +172,10 @@ struct MonitorProcessTable: View {
         }
       }.padding(.horizontal, 10).frame(width: 230, height: 31).background(
         theme.subtle, in: RoundedRectangle(cornerRadius: 7)
-      ).overlay(RoundedRectangle(cornerRadius: 7).stroke(theme.border, lineWidth: 1)).padding(
+      ).overlay(
+        RoundedRectangle(cornerRadius: 7).stroke(
+          searchFocus.wrappedValue ? theme.blue.opacity(0.65) : theme.border, lineWidth: 1)
+      ).padding(
         .leading, 8)
       Rectangle().fill(theme.border).frame(width: 1, height: 18).padding(.horizontal, 3)
       Button {
@@ -243,7 +246,7 @@ struct MonitorProcessTable: View {
         sort == key ? theme.text : theme.secondary
       ).frame(maxWidth: .infinity, alignment: alignment).padding(.horizontal, 16)
         .frame(height: 36).contentShape(Rectangle())
-    }.buttonStyle(.plain).help(
+    }.buttonStyle(MonitorSegmentButton(theme: theme, radius: 0)).help(
       unavailableColumn(key)
         ? "This metric is not exposed by public macOS APIs." : "Sort by \(title)"
     ).disabled(unavailableColumn(key))
@@ -300,7 +303,7 @@ private struct ProcessTableRow: View, Equatable {
         if isSelected { Rectangle().fill(theme.blue).frame(width: 2) }
       }.overlay(alignment: .bottom) { Rectangle().fill(theme.separator).frame(height: 1) }
         .contentShape(Rectangle())
-    }.buttonStyle(.plain).focusEffectDisabled().onHover { hovered = $0 }
+    }.buttonStyle(.plain).focusEffectDisabled().onHover { hovered = $0 }.help(row.name)
       .simultaneousGesture(TapGesture(count: 2).onEnded { inspect(row) }).contextMenu {
         Button("Inspect") { inspect(row) }
         Button("Copy PID") {
@@ -331,7 +334,8 @@ private struct ProcessTableRow: View, Equatable {
           )
           .foregroundColor(color)
         let resolved = context.resolve(label)
-        let textSize = resolved.measure(in: CGSize(width: CGFloat.greatestFiniteMagnitude, height: 41))
+        let textSize = resolved.measure(
+          in: CGSize(width: CGFloat.greatestFiniteMagnitude, height: 41))
         var cellContext = context
         cellContext.clip(
           to: Path(CGRect(x: x + 10, y: 0, width: max(0, cellWidth - 20), height: 41)))
