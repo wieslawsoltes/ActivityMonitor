@@ -21,3 +21,9 @@ sample PID 5 -file /tmp/stacks.txt
 ```
 
 The first pass is an intermediate result. Further process-table work and final screenshots/results follow in separate PRs.
+
+## Second pass: lighter numeric-cell rendering
+
+The SwiftUI process list now draws each row's numeric cells in one Canvas, retaining the existing process-name/icon view, full-row button, keyboard handling, context menu and accessibility summary. This removes nested per-cell layout without replacing the interaction model.
+
+The same 40-second accessibility-driven navigation workload completed at **10.90% CPU**, compared with **18.57%** in v1.0.0 (about 41% lower in these observations). All 20 switches completed. The interrupted trial was discarded; `canvas-navigation.json` is the complete trial. A native-table prototype increased accessibility inspection cost and was not retained. Final verification will repeat measurements after visual polish.
