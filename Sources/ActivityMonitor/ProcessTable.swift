@@ -291,7 +291,7 @@ private struct ProcessTableRow: View, Equatable {
           Text(row.name).font(.system(size: 12)).foregroundStyle(theme.text).lineLimit(1)
             .truncationMode(.middle)
         }.padding(.horizontal, 17).frame(width: nameWidth(width), alignment: .leading)
-        ForEach(columns) { c in cell(row, c).frame(width: cellWidth(c, width)) }
+        metricCells.frame(width: width - nameWidth(width), height: 41)
       }.frame(height: 41).background(
         isSelected
           ? theme.selected
@@ -315,18 +315,42 @@ private struct ProcessTableRow: View, Equatable {
         inspect(row)
       }
   }
-  func cell(_ p: ProcessRow, _ c: ProcessColumn) -> some View {
-    let primary = c.id == "primary"
-    let highlighted = primary && (metric == .cpu || metric == .memory)
-    return Text(text(p, c.id)).font(
-      .system(size: c.id == "user" ? 11 : 12, weight: primary ? .medium : .regular)
-    ).monospacedDigit().foregroundStyle(
-      highlighted ? theme.blue : primary ? theme.text : theme.secondary
-    ).lineLimit(1).padding(.horizontal, highlighted ? 7 : 0).padding(.vertical, highlighted ? 4 : 0)
-      .background(
-        highlighted ? theme.blue.opacity(0.095) : Color.clear, in: RoundedRectangle(cornerRadius: 3)
-      ).frame(maxWidth: .infinity, alignment: c.id == "user" ? .leading : .trailing).padding(
-        .horizontal, 16)
+  private var metricCells: some View {
+    Canvas { context, size in
+      var x: CGFloat = 0
+      let total = columns.reduce(0) { $0 + $1.weight }
+      for column in columns {
+        let cellWidth = size.width * column.weight / max(1, total)
+        let primary = column.id == "primary" || metric == .network && column.id == "received"
+        let highlighted = column.id == "primary" && (metric == .cpu || metric == .memory)
+        let color = highlighted ? theme.blue : primary ? theme.text : theme.secondary
+        let label = Text(text(row, column.id))
+          .font(
+            .system(size: column.id == "user" ? 11 : 12, weight: primary ? .medium : .regular)
+              .monospacedDigit()
+          )
+          .foregroundColor(color)
+        let resolved = context.resolve(label)
+        let textSize = resolved.measure(in: CGSize(width: CGFloat.greatestFiniteMagnitude, height: 41))
+        var cellContext = context
+        cellContext.clip(
+          to: Path(CGRect(x: x + 10, y: 0, width: max(0, cellWidth - 20), height: 41)))
+        if highlighted {
+          let pillWidth = min(cellWidth - 24, textSize.width + 14)
+          cellContext.fill(
+            Path(
+              roundedRect: CGRect(
+                x: x + cellWidth - 16 - pillWidth, y: 8.5, width: pillWidth, height: 24),
+              cornerRadius: 3), with: .color(theme.blue.opacity(0.095)))
+        }
+        let leading = column.id == "user"
+        cellContext.draw(
+          resolved,
+          at: CGPoint(x: leading ? x + 16 : x + cellWidth - (highlighted ? 23 : 16), y: 20.5),
+          anchor: leading ? .leading : .trailing)
+        x += cellWidth
+      }
+    }.accessibilityHidden(true)
   }
   func text(_ p: ProcessRow, _ key: String) -> String {
     switch key {
