@@ -266,6 +266,7 @@ struct ContentView: View {
             }.padding(.horizontal, 15).frame(height: 34).background(
               item == metric ? theme.card : Color.clear, in: RoundedRectangle(cornerRadius: 8)
             ).shadow(color: .black.opacity(item == metric ? 0.07 : 0), radius: 2, y: 1)
+              .contentShape(Rectangle())
           }.buttonStyle(.plain).accessibilityAddTraits(item == metric ? .isSelected : []).help(
             "\(item.rawValue) · ⌘\(Metric.allCases.firstIndex(of:item)!+1)")
         }
@@ -284,6 +285,7 @@ struct ContentView: View {
       ).frame(width: 28, height: 26).background(
         appearance == name ? theme.card : Color.clear, in: RoundedRectangle(cornerRadius: 6)
       ).shadow(color: .black.opacity(appearance == name ? 0.05 : 0), radius: 2, y: 1)
+        .contentShape(Rectangle())
     }.buttonStyle(.plain).help("\(name) appearance").accessibilityLabel("\(name) appearance")
       .accessibilityAddTraits(appearance == name ? .isSelected : [])
   }
@@ -313,6 +315,7 @@ struct ContentView: View {
             ).frame(width: 44, height: 24).background(
               range == value ? theme.card : Color.clear, in: RoundedRectangle(cornerRadius: 5)
             ).shadow(color: .black.opacity(range == value ? 0.06 : 0), radius: 2, y: 1)
+              .contentShape(Rectangle())
           }.buttonStyle(.plain)
         }
       }.padding(3).overlay(RoundedRectangle(cornerRadius: 8).stroke(theme.border, lineWidth: 1))

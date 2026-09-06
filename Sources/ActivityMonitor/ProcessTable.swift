@@ -236,6 +236,7 @@ struct MonitorProcessTable: View {
       }.font(.system(size: 10, weight: sort == key ? .semibold : .regular)).foregroundStyle(
         sort == key ? theme.text : theme.secondary
       ).frame(maxWidth: .infinity, alignment: alignment).padding(.horizontal, 16)
+        .frame(height: 36).contentShape(Rectangle())
     }.buttonStyle(.plain).help(
       unavailableColumn(key)
         ? "This metric is not exposed by public macOS APIs." : "Sort by \(title)"
