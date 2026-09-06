@@ -6,7 +6,7 @@ Tagged releases can use your Apple Developer Program membership to distribute a 
 
 1. Use an active, paid Apple Developer Program membership. In Xcode → Settings → Accounts → Manage Certificates, create a **Developer ID Application** certificate if you do not already have one. You need the appropriate account permissions; contact your team’s Account Holder if creation is unavailable. An Apple Development or Mac App Distribution certificate is not interchangeable with Developer ID Application.
 2. Export that certificate **with its private key** as a password-protected `.p12` using Keychain Access. The public `.cer` file alone cannot sign an app. Record the full identity, for example `Developer ID Application: Your Name (ABCDE12345)`.
-3. Create an App Store Connect **team API key** authorized for notarization. Download its `.p8` private key, and record the Key ID and Issuer ID. This workflow uses team keys, so the Issuer ID is required. Keep the downloaded key securely; Apple only offers the private-key download once.
+3. Create a dedicated App Store Connect **team API key** authorized for notarization, using the lowest role Apple permits for that purpose. Avoid reusing a broader production administration key. Download its `.p8` private key, and record the Key ID and Issuer ID. This workflow uses team keys, so the Issuer ID is required. Keep the downloaded key securely; Apple only offers the private-key download once.
 
 For this app’s current capabilities, no App Store listing, sandbox entitlement or provisioning profile is needed. You do not need to put your normal Apple account password in GitHub.
 

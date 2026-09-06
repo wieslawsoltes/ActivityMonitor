@@ -67,6 +67,9 @@ jobs:
           VERSION: ${{ needs.version.outputs.version }}
           EXPECT_NOTARIZED: '1'
         run: ./scripts/verify-package.sh
+      - name: Remove signing credentials
+        if: ${{ always() }}
+        run: ./scripts/cleanup-apple-signing.sh
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: ActivityMonitor-notarized
@@ -85,9 +88,6 @@ jobs:
           if-no-files-found: ignore
           retention-days: 7
           path: dist/*notary*.json
-      - name: Remove signing credentials
-        if: ${{ always() }}
-        run: ./scripts/cleanup-apple-signing.sh
   publish:
     needs: [version, build, sign]
     if: >-
