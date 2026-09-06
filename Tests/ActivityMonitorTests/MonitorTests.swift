@@ -123,4 +123,49 @@ final class MonitorTests: XCTestCase {
     XCTAssertTrue(processCSV([row]).hasSuffix(",1234,5678"))
   }
 
+  func testProcessQueryRefreshesMetricFilterAndDirection() throws {
+    let own = try XCTUnwrap(Collector().collect().processes.first { $0.id == getpid() })
+    var a = own
+    a.id = 100
+    a.name = "Alpha"
+    a.cpu = 10
+    a.memory = 300
+    a.isApp = true
+    var b = own
+    b.id = 101
+    b.name = "Beta"
+    b.cpu = 20
+    b.memory = 100
+    b.isApp = false
+    var query = ProcessQuery(
+      metric: .cpu, query: "", filter: "All processes", sort: "primary", descending: true)
+    XCTAssertEqual(query.apply([a, b]).map(\.id), [101, 100])
+    query.metric = .memory
+    XCTAssertEqual(query.apply([a, b]).map(\.id), [100, 101])
+    query.descending = false
+    XCTAssertEqual(query.apply([a, b]).map(\.id), [101, 100])
+    query.filter = "Applications"
+    XCTAssertEqual(query.apply([a, b]).map(\.id), [100])
+    query.filter = "All processes"
+    query.query = "BETA"
+    XCTAssertEqual(query.apply([a, b]).map(\.id), [101])
+    query.query = "100"
+    XCTAssertEqual(query.apply([a, b]).map(\.id), [100])
+  }
+  func testProcessQueryHasDeterministicTiesAndNetworkOrdering() throws {
+    var a = try XCTUnwrap(Collector().collect().processes.first { $0.id == getpid() })
+    var b = a
+    a.id = 100
+    b.id = 101
+    a.networkReceived = nil
+    b.networkReceived = 20
+    var query = ProcessQuery(
+      metric: .network, query: "", filter: "All processes", sort: "received", descending: true)
+    XCTAssertEqual(query.apply([a, b]).map(\.id), [101, 100])
+    a.networkReceived = 20
+    XCTAssertEqual(query.apply([a, b]).map(\.id), [101, 100])
+    query.descending = false
+    XCTAssertEqual(query.apply([b, a]).map(\.id), [100, 101])
+  }
+
 }
