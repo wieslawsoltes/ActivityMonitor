@@ -63,6 +63,7 @@ struct MonitorActionButton: ButtonStyle {
       configuration.isPressed ? theme.hover : danger ? theme.coral.opacity(0.08) : Color.clear,
       in: RoundedRectangle(cornerRadius: 8)
     ).overlay(RoundedRectangle(cornerRadius: 8).stroke(theme.border, lineWidth: 1))
+      .contentShape(Rectangle())
   }
 }
 struct BrandMark: View {
