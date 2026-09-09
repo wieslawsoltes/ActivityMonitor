@@ -9,6 +9,7 @@ enum Metric: String, CaseIterable, Identifiable {
   case energy = "Energy"
   case disk = "Disk"
   case network = "Network"
+  case gpu = "GPU"
   var id: String { rawValue }
   var icon: String {
     switch self {
@@ -17,6 +18,7 @@ enum Metric: String, CaseIterable, Identifiable {
     case .energy: return "bolt"
     case .disk: return "internaldrive"
     case .network: return "wifi"
+    case .gpu: return "square.3.layers.3d"
     }
   }
   var subtitle: String {
@@ -26,6 +28,7 @@ enum Metric: String, CaseIterable, Identifiable {
     case .energy: return "A closer look at power and efficiency."
     case .disk: return "Every read. Every write. In sight."
     case .network: return "Keep a pulse on what’s flowing."
+    case .gpu: return "Graphics and compute, across your Mac."
     }
   }
 }
@@ -49,6 +52,15 @@ struct ProcessRow: Identifiable, Codable, Equatable {
   var networkReceived: UInt64? = nil
   var networkSent: UInt64? = nil
   var ioAccessible: Bool
+  var gpuPercent: Double? = nil
+  var gpuTime: Double? = nil
+  var gpuWaiting = false
+  var gpuAvailability: String {
+    gpuPercent != nil
+      ? "GPU counters across all reporting devices"
+      : gpuWaiting
+        ? "Waiting for a second GPU sample" : "GPU counters unavailable for this process"
+  }
 }
 struct Point: Identifiable {
   let id = UUID()
@@ -59,6 +71,7 @@ struct Point: Identifiable {
 struct Snapshot {
   var processes: [ProcessRow]
   var system: AMSystem
+  var gpuDevices: [GPUDeviceSample] = []
 }
 func bytes(_ value: UInt64) -> String {
   ByteCountFormatter.string(fromByteCount: Int64(clamping: value), countStyle: .memory)
@@ -76,6 +89,8 @@ final class Collector: @unchecked Sendable {
   var networkDate = Date.distantPast
   var time = Date()
   private var users: [UInt32: String] = [:]
+  private let gpuReader = GPUHardwareReader()
+  private var gpuTracker = GPUProcessTracker()
   func collect() -> Snapshot {
     let now = Date()
     let elapsed = max(now.timeIntervalSince(time), 0.001)
@@ -91,6 +106,11 @@ final class Collector: @unchecked Sendable {
         })
       networkDate = now
     }
+    let gpu = gpuReader.read()
+    let gpuProcesses = gpuTracker.update(
+      gpu,
+      identities: Dictionary(
+        uniqueKeysWithValues: buffer.prefix(Int(count)).map { ($0.pid, $0.start) }))
     var next: [Int32: AMProcess] = [:]
     let rows = buffer.prefix(Int(count)).map { p -> ProcessRow in
       next[p.pid] = p
@@ -119,19 +139,24 @@ final class Collector: @unchecked Sendable {
         resident: p.resident, threads: p.threads, read: p.read, written: p.written, isApp: false,
         accessible: p.accessible != 0, kind: p.translated != 0 ? "Intel" : nativeKind,
         networkReceived: networkCounters?.received, networkSent: networkCounters?.sent,
-        ioAccessible: p.ioAccessible != 0)
+        ioAccessible: p.ioAccessible != 0, gpuPercent: gpuProcesses[p.pid]?.percent,
+        gpuTime: gpuProcesses[p.pid]?.seconds, gpuWaiting: gpuProcesses[p.pid]?.waiting ?? false)
     }
     old = next
     time = now
     var system = AMSystem()
     am_system(&system)
-    return Snapshot(processes: rows, system: system)
+    return Snapshot(processes: rows, system: system, gpuDevices: gpu.devices)
   }
 }
 @MainActor final class Monitor: ObservableObject {
   @Published var rows: [ProcessRow] = []
   @Published var system = AMSystem()
   @Published var histories: [Metric: [Point]] = [:]
+  @Published var gpuDevices: [GPUDeviceSample] = []
+  @Published var gpuHistories: [UInt64: [GPUHistoryPoint]] = [:]
+  @Published var selectedGPU: UInt64?
+  var gpuDevice: GPUDeviceSample? { gpuDevices.first { $0.id == selectedGPU } ?? gpuDevices.first }
   @Published var paused = false
   @Published var interval = 2.0
   @Published var lastUpdate: Date?
@@ -149,6 +174,7 @@ final class Collector: @unchecked Sendable {
   private var task: Task<Void, Never>?
   private var previous: AMSystem?
   private var previousDate: Date?
+  private var refreshing = false
   private var diskPrevious: [Int32: ProcessRow] = [:]
   init(startAutomatically: Bool = true) {
     system.battery = -1
@@ -162,6 +188,9 @@ final class Collector: @unchecked Sendable {
     }
   }
   func refresh() async {
+    guard !refreshing else { return }
+    refreshing = true
+    defer { refreshing = false }
     let collector = self.collector
     let snapshot = await Task.detached(priority: .utility) { collector.collect() }.value
     let now = Date()
@@ -211,6 +240,7 @@ final class Collector: @unchecked Sendable {
       return p
     }
     system = snapshot.system
+    updateGPU(snapshot.gpuDevices, date: now)
     let used = Double(system.active + system.wired + system.compressed)
     let values: [(Metric, Double, Double)] = [
       (.cpu, userCPU, systemCPU), (.memory, used, Double(system.pressure)),
@@ -227,6 +257,26 @@ final class Collector: @unchecked Sendable {
     lastUpdate = now
     diskPrevious = Dictionary(uniqueKeysWithValues: rows.map { ($0.id, $0) })
   }
+  func updateGPU(_ devices: [GPUDeviceSample], date: Date) {
+    let connected = Set(devices.map(\.id))
+    let missing = gpuDevices.filter { !connected.contains($0.id) }.map { device in
+      var disconnected = device
+      disconnected.connected = false
+      disconnected.utilization = nil
+      disconnected.renderer = nil
+      disconnected.tiler = nil
+      disconnected.memoryUsed = nil
+      disconnected.memoryAllocated = nil
+      return disconnected
+    }
+    gpuDevices = devices + missing
+    if selectedGPU == nil { selectedGPU = gpuDevices.first?.id }
+    for device in gpuDevices {
+      gpuHistories[device.id, default: []].append(
+        GPUHistoryPoint(date: date, utilization: device.utilization))
+      gpuHistories[device.id]?.removeAll { $0.date < date.addingTimeInterval(-900) }
+    }
+  }
   func terminate(_ row: ProcessRow, force: Bool) {
     guard row.id > 1, row.id != getpid(), row.uid == getuid() else {
       error = "Only other processes owned by your account can be stopped."
@@ -237,6 +287,25 @@ final class Collector: @unchecked Sendable {
       return
     }
     if kill(row.id, force ? SIGKILL : SIGTERM) != 0 { error = String(cString: strerror(errno)) }
+  }
+  func exportGPU(_ rows: [ProcessRow]) {
+    // Freeze every field together before the save panel can run another sampling turn.
+    let snapshot = GPUExportSnapshot(
+      capturedAt: lastUpdate, selectedDevice: gpuDevice?.id,
+      devices: gpuDevices,
+      history: Dictionary(
+        uniqueKeysWithValues: gpuHistories.map { (String($0.key), $0.value) }), processes: rows)
+    let panel = NSSavePanel()
+    panel.nameFieldStringValue = "Activity-Monitor-GPU.json"
+    panel.allowedContentTypes = [.json]
+    if panel.runModal() == .OK, let url = panel.url {
+      do {
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+        encoder.dateEncodingStrategy = .iso8601
+        try encoder.encode(snapshot).write(to: url, options: .atomic)
+      } catch { self.error = error.localizedDescription }
+    }
   }
   func exportJSON(_ rows: [ProcessRow]) {
     let panel = NSSavePanel()
@@ -274,17 +343,19 @@ func processStillMatches(_ row: ProcessRow) -> Bool {
 
 func processCSV(_ rows: [ProcessRow]) -> String {
   let header =
-    "Name,PID,User,CPU %,CPU seconds,Memory bytes,Threads,Bytes read,Bytes written,Network bytes received,Network bytes sent\n"
-  return header
-    + rows.map { p in
-      [
-        csvCell(p.name), String(p.id), csvCell(p.user),
-        p.accessible ? String(format: "%.2f", p.cpu) : "", p.accessible ? String(p.cpuTime) : "",
-        p.accessible ? String(p.memory) : "", p.accessible ? String(p.threads) : "",
-        p.ioAccessible ? String(p.read) : "", p.ioAccessible ? String(p.written) : "",
-        p.networkReceived.map(String.init) ?? "", p.networkSent.map(String.init) ?? "",
-      ].joined(separator: ",")
-    }.joined(separator: "\n")
+    "Name,PID,User,CPU %,CPU seconds,Memory bytes,Threads,Bytes read,Bytes written,Network bytes received,Network bytes sent,GPU %,Observed GPU seconds\n"
+  let lines: [String] = rows.map { p in
+    let cells: [String] = [
+      csvCell(p.name), String(p.id), csvCell(p.user),
+      p.accessible ? String(format: "%.2f", p.cpu) : "", p.accessible ? String(p.cpuTime) : "",
+      p.accessible ? String(p.memory) : "", p.accessible ? String(p.threads) : "",
+      p.ioAccessible ? String(p.read) : "", p.ioAccessible ? String(p.written) : "",
+      p.networkReceived.map(String.init) ?? "", p.networkSent.map(String.init) ?? "",
+      p.gpuPercent.map { String(format: "%.4f", $0) } ?? "", p.gpuTime.map { String($0) } ?? "",
+    ]
+    return cells.joined(separator: ",")
+  }
+  return header + lines.joined(separator: "\n")
 }
 
 var nativeKind: String {
@@ -321,4 +392,15 @@ var nativeKind: String {
   deinit {
     for observer in observers { NSWorkspace.shared.notificationCenter.removeObserver(observer) }
   }
+}
+
+struct GPUExportSnapshot: Codable {
+  var capturedAt: Date?
+  var selectedDevice: UInt64?
+  var devices: [GPUDeviceSample]
+  var history: [String: [GPUHistoryPoint]]
+  var processes: [ProcessRow]
+  var processScope = "All reporting GPU devices; filtered process list"
+  var processRateUnit = "Driver-reported GPU seconds per elapsed second, multiplied by 100"
+  var processTimeScope = "Valid sampled driver-time deltas observed during this session"
 }

@@ -30,6 +30,16 @@ The release is built for both arm64 and x86_64. Package validation checks the ex
 
 ## Limits
 
-Tests run on both GitHub-hosted Apple silicon and Intel macOS runners. No physical Intel desktop UI test was performed. Deployment targets macOS 14; runtime verification was on macOS 26.6. Protected counters, proprietary Energy Impact, GPU accounting and per-process packet counts remain explicitly unavailable as described in README.md. Histories begin with real samples at launch and are never fabricated to fill the graph.
+Tests run on both GitHub-hosted Apple silicon and Intel macOS runners. No physical Intel desktop UI test was performed. Deployment targets macOS 14; runtime verification was on macOS 26.6. Protected counters, proprietary Energy Impact, per-process packet counts remain explicitly unavailable as described in README.md. Histories begin with real samples at launch and are never fabricated to fill the graph.
 
 The local artifacts are ad-hoc signed. Developer ID signing and Apple notarization were not performed because a distribution identity was not available. The packaging script supports both when credentials are supplied.
+
+## GPU feature verification — September 9, 2026
+
+The GPU feature adds eleven focused tests (24 total): parser validation, real zero versus unavailable values, nanosecond rate conversion, warmup, resets, individual counters resetting inside a growing total, queue changes, PID reuse, duplicate client observations, multiple devices, disconnect/reconnect, bounded histories, graph gaps, alternate driver keys, Metal identity matching, missing-last sorting, and CSV/JSON GPU data.
+
+A controlled Metal process reported 1,233,367,625 cumulative driver nanoseconds. Apple's Activity Monitor displayed 1.23 seconds for the same PID, validating the conversion. Metal command-buffer elapsed time differed, so it is explicitly not used as the GPU process-time definition. See [reproduction and evidence](docs/GPU_VALIDATION.md).
+
+The initial GPU build averaged 4.50% CPU over 30 seconds with the GPU view live and a two-second sampling interval. This is one observation on a busy development machine, not a cross-hardware benchmark. Universal DMG/ZIP verification passed locally. Native GPU screenshots use live driver values.
+
+Native GPU checks confirmed Command–6 selection, a narrower tiled-window layout without overlapping tabs, GPU time sorting in both directions, fifteen-minute history selection, light/dark main views and inspectors, and the gallery's paired GPU previews. A GPU export saved through the native panel parsed successfully with one device, 13 history points and 536 process rows, including 17 processes reporting GPU values and explicit absence for unavailable counters.

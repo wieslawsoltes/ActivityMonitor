@@ -11,6 +11,15 @@ Version 1.1, captured from the running macOS app on September 6, 2026. Values ar
 | Network | ![network light](v1.1/network-light.jpg) | ![network dark](v1.1/network-dark.jpg) |
 | Inspector | ![inspector light](v1.1/inspector-light.jpg) | ![inspector dark](v1.1/inspector-dark.jpg) |
 
+## GPU preview
+
+Captured from the GPU feature build on September 9, 2026, with real M3 Pro system data. The earlier views above show version 1.1.
+
+| View | Light | Dark |
+| --- | --- | --- |
+| GPU | ![GPU light](gpu/gpu-light.jpg) | ![GPU dark](gpu/gpu-dark.jpg) |
+| GPU inspector | ![GPU inspector light](gpu/inspector-light.jpg) | ![GPU inspector dark](gpu/inspector-dark.jpg) |
+
 ## Search focus
 
 The focused search field has a blue outline that remains visible in either appearance.
