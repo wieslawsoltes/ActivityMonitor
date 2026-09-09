@@ -1,25 +1,24 @@
-Activity Monitor 1.2 adds GPU monitoring alongside CPU, memory, energy, disk and network activity.
+Activity Monitor 1.3 brings responsive workspaces and a complete menu-bar monitor to all six performance views.
 
 ### What's new
 
-- A dedicated **GPU view** with device utilization, 1/5/15-minute histories, renderer and tiler activity, and driver-reported GPU memory. Open it with **Command–6**.
-- Sort processes by **GPU usage** or **observed GPU time**. GPU counters also appear in the CPU and Memory views and the process inspector.
-- Choose a GPU for its device overview. Process counters cover all reporting devices.
-- Export GPU snapshot and history data as JSON, with GPU counters included in process CSV and JSON exports.
-- Light and dark GPU layouts in the six-view gallery, with navigation that fits narrower windows.
+- **Adaptive windows:** retain the familiar default layout, use a compact workspace down to 420 × 480 points, or expand for larger charts. Breakdowns collapse on small windows; process details open alongside or over the table to fit the available space.
+- **A full menu-bar monitor:** live CPU, memory, energy, disk, network and GPU charts, history ranges, GPU selection, top processes, pause and appearance controls. Open any listed process in the main inspector.
+- **Interactive histories:** hover for timestamped values, or focus a chart and use the arrow keys. Missing observations remain gaps.
+- **Compact process controls:** search, filter, sort and choose columns at smaller sizes, with access to the full column set.
+- **Clearer CPU readings:** total-capacity labels explain the overview’s 0–100% scale, while process values retain 100% per logical processor and can exceed 100%. Monitoring now defaults to one-second updates; two- and five-second options remain available.
+- **Window shortcuts:** Command–Option–1/2/3 selects compact, minimum or default size; Command–Shift–M opens the menu-bar monitor.
 
 | Light | Dark |
 | --- | --- |
-| ![GPU monitoring in light appearance](https://raw.githubusercontent.com/wieslawsoltes/ActivityMonitor/v1.2.0/docs/screenshots/gpu/gpu-light.jpg) | ![GPU monitoring in dark appearance](https://raw.githubusercontent.com/wieslawsoltes/ActivityMonitor/v1.2.0/docs/screenshots/gpu/gpu-dark.jpg) |
+| ![Light menu-bar monitor](https://raw.githubusercontent.com/wieslawsoltes/ActivityMonitor/v1.3.0/docs/screenshots/adaptive/tray-light.jpg) | ![Dark menu-bar monitor](https://raw.githubusercontent.com/wieslawsoltes/ActivityMonitor/v1.3.0/docs/screenshots/adaptive/tray-dark.jpg) |
 
 ### Install
 
-Download the **universal DMG**, open it, and drag **Activity Monitor** to **Applications**. The **universal ZIP** contains the complete `.app` bundle as an alternative. Both support Apple silicon and Intel on macOS 14 or later. `SHA256SUMS` verifies download contents; `INSTALL.md` contains installation details.
+Download the **universal DMG**, open it, and drag **Activity Monitor** to **Applications**. The **universal ZIP** contains the complete app as an alternative. Both support Apple silicon and Intel on **macOS 14 or later**. `SHA256SUMS` verifies download contents; `INSTALL.md` contains installation details.
 
 ### Measurement notes
 
-GPU counter availability depends on your Mac and graphics driver. Unavailable values appear as **—**. Observed process GPU time accumulates during the monitoring session; overlapping GPU work can produce process rates above 100%. Device utilization and process rates measure different things.
+Counter availability depends on macOS and your hardware. Unavailable values appear as **—**. Energy shows application CPU workload. GPU process counters cover all reporting devices; observed GPU time begins with the monitoring session.
 
-Live GPU counters were validated on an M3 Pro, including a GPU-time comparison with Apple's Activity Monitor. Intel and multiple-device behavior have automated test coverage; physical Intel/eGPU counter validation remains unavailable.
-
-[Measurement definitions](https://github.com/wieslawsoltes/ActivityMonitor/blob/v1.2.0/docs/METRICS.md#gpu) · [All screenshots](https://github.com/wieslawsoltes/ActivityMonitor/blob/v1.2.0/docs/screenshots/README.md) · [Changes since 1.1.0](https://github.com/wieslawsoltes/ActivityMonitor/compare/v1.1.0...v1.2.0)
+[Measurement definitions](https://github.com/wieslawsoltes/ActivityMonitor/blob/v1.3.0/docs/METRICS.md) · [Changes since 1.2.0](https://github.com/wieslawsoltes/ActivityMonitor/compare/v1.2.0...v1.3.0)

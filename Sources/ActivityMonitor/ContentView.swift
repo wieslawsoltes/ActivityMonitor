@@ -4,6 +4,8 @@ import SwiftUI
 struct ContentView: View {
   @Environment(\.colorScheme) var colorScheme
   @EnvironmentObject var monitor: Monitor
+  @EnvironmentObject var navigation: MonitorNavigation
+  @Environment(\.accessibilityReduceMotion) private var reduceMotion
   @AppStorage("showMenuBar") var showMenuBar = false
   @AppStorage("appearance") var appearance = "System"
   @State var metric: Metric = .cpu
@@ -63,32 +65,59 @@ struct ContentView: View {
     }
   }
   var body: some View {
-    VStack(spacing: 0) {
-      titlebar
+    GeometryReader { geometry in
+      let layout = MonitorLayout(width: geometry.size.width, height: geometry.size.height)
       VStack(spacing: 0) {
-        sectionHeading.padding(.top, 23).padding(.bottom, 20)
-        MonitorOverview(metric: metric, range: range, theme: theme).environmentObject(monitor)
-          .padding(.bottom, 24)
-        HStack(spacing: 16) {
-          MonitorProcessTable(
-            rows: filtered, metric: metric, theme: theme, query: $query, filter: $filter,
-            selection: $selection, inspector: $inspector, sort: $sort, descending: $descending,
-            inspect: { p in
-              selection = p.id
-              inspector = true
-            }, stop: { stopTarget = $0 }, searchFocus: $searchFocused)
-          if inspector {
-            MonitorInspector(
-              process: selected, theme: theme, busy: sampling, close: { inspector = false },
-              sample: sample, files: inspectFiles, reveal: reveal, stop: { stopTarget = $0 }
-            ).frame(width: 298)
+        adaptiveTitlebar(layout)
+        if layout.scrollsWorkspace {
+          ScrollView {
+            workspace(layout, scrolling: true)
           }
-        }.frame(maxHeight: .infinity)
-      }.padding(.horizontal, 26)
-      statusbar
-    }.background(theme.window).foregroundStyle(theme.text).font(.system(size: 12)).frame(
-      minWidth: 1120, minHeight: 700
-    ).ignoresSafeArea(.container, edges: .top)
+        } else {
+          workspace(layout, scrolling: false)
+        }
+        if layout.standard {
+          statusbar
+        } else {
+          HStack {
+            Text("\(filtered.count) processes")
+            Spacer()
+            Label(
+              monitor.paused ? "Paused" : "Live",
+              systemImage: monitor.paused ? "pause.fill" : "waveform.path.ecg")
+            if let last = monitor.lastUpdate {
+              Text(last.formatted(date: .omitted, time: .standard))
+            }
+          }.font(.system(size: 10)).foregroundStyle(theme.secondary).padding(
+            .horizontal, layout.gutter
+          )
+          .frame(height: 32).background(theme.toolbar)
+        }
+      }
+      .overlay(alignment: .trailing) {
+        if inspector && !layout.inlineInspector {
+          ZStack(alignment: .trailing) {
+            Color.black.opacity(0.18).onTapGesture { inspector = false }
+            inspectorPanel.frame(width: min(layout.width - 28, 360))
+              .padding(14).shadow(color: .black.opacity(0.18), radius: 18)
+              .transition(.move(edge: .trailing).combined(with: .opacity))
+          }
+        }
+      }
+      .animation(reduceMotion ? nil : .easeInOut(duration: 0.18), value: inspector)
+    }.background(theme.window).foregroundStyle(theme.text).font(.system(size: 12))
+      .frame(minWidth: 420, minHeight: 480).ignoresSafeArea(.container, edges: .top)
+      .onReceive(navigation.$request) { request in
+        guard let request else { return }
+        selectMetric(request.metric)
+        range = request.range
+        if let pid = request.pid {
+          query = ""
+          filter = "All processes"
+          selection = pid
+          inspector = true
+        }
+      }
       .onReceive(monitor.$rows) { rows in
         refreshPresentation(rows)
       }
@@ -139,7 +168,7 @@ struct ContentView: View {
             "CPU percentages are measured between samples. A process can exceed 100% when using multiple cores. Disk rates include readable processes; network counters aggregate non-loopback interfaces and can include VPN traffic. Process GPU rates use driver execution-time counters across all reporting devices and can exceed 100% when work overlaps. GPU time is observed during this session. Restricted or unsupported counters appear as —."
           ).foregroundStyle(.secondary)
           Button("Done") { showHelp = false }.keyboardShortcut(.defaultAction)
-        }.padding(32).frame(width: 510)
+        }.padding(32).frame(width: min(510, max(360, (NSApp.mainWindow?.frame.width ?? 560) - 48)))
       }
       .sheet(isPresented: Binding(get: { sampleText != nil }, set: { if !$0 { sampleText = nil } }))
     {
@@ -155,7 +184,9 @@ struct ContentView: View {
             .enabled
           ).frame(maxWidth: .infinity, alignment: .leading)
         }
-      }.padding(24).frame(width: 850, height: 600)
+      }.padding(24).frame(
+        width: min(850, max(360, (NSApp.mainWindow?.frame.width ?? 900) - 48)),
+        height: min(600, max(360, (NSApp.mainWindow?.frame.height ?? 700) - 60)))
     }
       .background {
         Group {
@@ -166,6 +197,105 @@ struct ContentView: View {
           }
         }.hidden()
       }
+  }
+  @ViewBuilder func workspace(_ layout: MonitorLayout, scrolling: Bool) -> some View {
+    VStack(spacing: 0) {
+      if layout.standard {
+        sectionHeading.padding(.top, 23).padding(.bottom, 20)
+      } else {
+        VStack(alignment: .leading, spacing: 12) {
+          HStack {
+            Text(heading).font(.system(size: 23, weight: .semibold)).tracking(-0.6)
+            Spacer(minLength: 4)
+            Circle().fill(monitor.paused ? theme.secondary : theme.green).frame(width: 6, height: 6)
+            Text(monitor.paused ? "Paused" : "Live").font(.system(size: 10)).foregroundStyle(
+              theme.secondary)
+          }
+          HStack {
+            if metric == .gpu {
+              GPUDevicePicker(theme: theme)
+            } else {
+              Text(metric.rawValue + " overview").font(.system(size: 11)).foregroundStyle(
+                theme.secondary)
+            }
+            Spacer(minLength: 4)
+            HistoryRangePicker(range: $range, theme: theme)
+          }
+        }.padding(.vertical, 18)
+      }
+      MonitorOverview(
+        metric: metric, range: range, theme: theme,
+        width: layout.width - layout.gutter * 2, expanded: layout.expanded
+      )
+      .padding(.bottom, layout.standard ? 24 : 16)
+      HStack(spacing: 16) {
+        MonitorProcessTable(
+          rows: filtered, metric: metric, theme: theme, query: $query, filter: $filter,
+          selection: $selection, inspector: $inspector, sort: $sort, descending: $descending,
+          inspect: { p in
+            selection = p.id
+            inspector = true
+          }, stop: { stopTarget = $0 }, searchFocus: $searchFocused)
+        if inspector && layout.inlineInspector {
+          inspectorPanel.frame(width: layout.inspectorWidth)
+        }
+      }.frame(height: scrolling ? max(340, layout.height - 430) : nil)
+        .frame(maxHeight: scrolling ? nil : .infinity)
+    }.padding(.horizontal, layout.gutter)
+  }
+  var inspectorPanel: some View {
+    MonitorInspector(
+      process: selected, theme: theme, busy: sampling, close: { inspector = false },
+      sample: sample, files: inspectFiles, reveal: reveal, stop: { stopTarget = $0 })
+  }
+  @ViewBuilder func adaptiveTitlebar(_ layout: MonitorLayout) -> some View {
+    if layout.width >= 1350 {
+      titlebar
+    } else {
+      VStack(spacing: 0) {
+        ZStack {
+          WindowChrome()
+          HStack(spacing: 12) {
+            TrafficLights()
+            Text("Activity Monitor").font(.system(size: 12, weight: .semibold))
+            Spacer(minLength: 0)
+            Button {
+              monitor.paused.toggle()
+            } label: {
+              Image(systemName: monitor.paused ? "play" : "pause")
+            }
+            .buttonStyle(MonitorIconButton(theme: theme)).help(monitor.paused ? "Resume" : "Pause")
+            Menu {
+              Button("Export visible processes…") { monitor.export(filtered) }
+              Button("Export JSON snapshot…") { monitor.exportJSON(filtered) }
+              Button("Export GPU snapshot & history…") { monitor.exportGPU(filtered) }
+              Divider()
+              Picker("Appearance", selection: $appearance) {
+                ForEach(["Light", "Dark", "System"], id: \.self) { Text($0).tag($0) }
+              }
+              Toggle("Show monitor in menu bar", isOn: $showMenuBar)
+              Picker("Update interval", selection: $monitor.interval) {
+                Text("Every second").tag(1.0)
+                Text("Every 2 seconds").tag(2.0)
+                Text("Every 5 seconds").tag(5.0)
+              }
+              Divider()
+              Button("All views & themes") { showGallery = true }
+              Button("Keyboard shortcuts & data notes") { showHelp = true }
+            } label: {
+              Image(systemName: "ellipsis").frame(width: 32, height: 32)
+            }
+            .menuStyle(.borderlessButton).menuIndicator(.hidden).fixedSize().help("More")
+          }.padding(.horizontal, layout.gutter)
+        }.frame(height: 50)
+        MetricSwitcher(
+          metric: Binding(get: { metric }, set: selectMetric), theme: theme, compact: layout.compact
+        )
+        .padding(.horizontal, layout.gutter).padding(.bottom, 10)
+      }.background(theme.toolbar).overlay(alignment: .bottom) {
+        Rectangle().fill(theme.border).frame(height: 1)
+      }
+    }
   }
   var titlebar: some View {
     ZStack {
@@ -224,7 +354,7 @@ struct ContentView: View {
             appearanceButton("System", "desktopcomputer")
           }.padding(3).overlay(RoundedRectangle(cornerRadius: 9).stroke(theme.border, lineWidth: 1))
           Menu {
-            Toggle("Show CPU in menu bar", isOn: $showMenuBar)
+            Toggle("Show monitor in menu bar", isOn: $showMenuBar)
             Button("Export JSON snapshot…") { monitor.exportJSON(filtered) }
             Button("Export GPU snapshot & history…") { monitor.exportGPU(filtered) }
             Divider()

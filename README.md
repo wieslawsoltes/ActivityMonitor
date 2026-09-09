@@ -35,17 +35,27 @@ Keep an eye on performance, understand resource usage, and find the processes th
 - **Take action.** Quit or force quit your processes, with confirmation before termination.
 - **Follow changes.** Switch between one-, five- and fifteen-minute histories, adjust the refresh interval or pause the view.
 - **Keep a record.** Export process data as CSV or JSON and save diagnostic reports.
-- **Stay informed.** Add the optional CPU monitor to your menu bar.
+- **Stay informed.** Open all six views from your menu bar, with live charts, device details and the busiest processes.
 
 ## Comfortable in any light
 
-Choose light, dark or system appearance. A compact inspector keeps process details alongside the table, while the overview remains visible as you scroll.
+Choose light, dark or system appearance. The process inspector sits beside wide workspaces and opens over compact windows.
 
 ![Activity Monitor in dark appearance](docs/screenshots/v1.1/cpu-dark.jpg)
 
 *Screenshots show the running app with real system data.*
 
 [Explore all six views in both themes](docs/screenshots/README.md).
+
+## Fits your workspace
+
+Keep the familiar three-panel overview at the default size, use a compact window alongside other apps, or expand for larger histories and more process detail. Smaller windows prioritize the chart and key columns, with expandable breakdowns and access to the full column set. Hover over a chart to inspect a sample, or focus it and use the arrow keys.
+
+The menu-bar monitor brings all six views into a compact popover. Change the history range, select a GPU, pause monitoring, or open a process in the main window. Both surfaces share the same live session.
+
+| Compact workspace | Menu bar · Light | Menu bar · Dark |
+| :---: | :---: | :---: |
+| ![Compact Activity Monitor](docs/screenshots/adaptive/compact.png) | ![Menu-bar GPU monitoring in light appearance](docs/screenshots/adaptive/tray-light.jpg) | ![Menu-bar GPU monitoring in dark appearance](docs/screenshots/adaptive/tray-dark.jpg) |
 
 ## A closer look at graphics
 
@@ -59,7 +69,7 @@ GPU availability depends on your Mac and its driver. Process counters cover all 
 
 ## Smoother everyday monitoring
 
-Tabs respond across their full bounds. Clear hover, press and search-focus feedback makes controls easier to use, while a lighter process table reduces the work needed to switch views. Sampling stays at the same frequency. See the [profiling results](docs/performance/README.md).
+Tabs respond across their full bounds. Clear hover, press and search-focus feedback makes controls easier to use, while a lighter process table reduces the work needed to switch views. Monitoring updates every second by default, with two- and five-second options. See the [profiling results](docs/performance/README.md).
 
 ## Installation
 
@@ -83,12 +93,17 @@ To uninstall, quit the app and move it from Applications to the Trash. See [inst
 | **↑ / ↓** | Select a process when the list is focused |
 | **Return / Escape** | Open or close the inspector when the list is focused |
 | **⌘⇧E** | Export all processes as CSV |
+| **⌘⇧M** | Open the menu-bar monitor |
+| **⌘⌥1 / ⌘⌥2 / ⌘⌥3** | Compact / minimum / default window size |
+| **← / →** | Inspect samples when a chart is focused |
 
 The toolbar export button saves the current filtered and sorted list.
 
 ## Your data stays on your Mac
 
 No accounts, telemetry or uploads. Reports and exports are saved to a location you choose. No administrator helper is installed.
+
+The CPU overview measures total capacity on a 0–100% scale. Process CPU percentages use 100% per logical processor and can exceed 100%.
 
 macOS restricts some process information; unavailable values appear as **—**. The Energy view shows **CPU workload**, not Apple’s proprietary Energy Impact score. GPU counters appear where the graphics driver exposes them; per-process packet counts remain unavailable. Disk totals cover readable processes; network totals can differ from individual process counters. Histories begin at launch and stay in memory for up to fifteen minutes.
 

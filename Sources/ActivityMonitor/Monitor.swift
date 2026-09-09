@@ -115,12 +115,7 @@ final class Collector: @unchecked Sendable {
     let rows = buffer.prefix(Int(count)).map { p -> ProcessRow in
       next[p.pid] = p
       let previous = old[p.pid]
-      let cpu: Double
-      if let previous, previous.start == p.start, p.cpu >= previous.cpu {
-        cpu = Double(p.cpu - previous.cpu) / 1e9 / elapsed * 100
-      } else {
-        cpu = 0
-      }
+      let cpu = CPUAccounting.processPercent(current: p, previous: previous, elapsed: elapsed)
       var n = p.name
       let name = withUnsafePointer(to: &n) {
         $0.withMemoryRebound(to: CChar.self, capacity: 1024) { String(cString: $0) }
@@ -158,7 +153,7 @@ final class Collector: @unchecked Sendable {
   @Published var selectedGPU: UInt64?
   var gpuDevice: GPUDeviceSample? { gpuDevices.first { $0.id == selectedGPU } ?? gpuDevices.first }
   @Published var paused = false
-  @Published var interval = 2.0
+  @Published var interval = 1.0
   @Published var lastUpdate: Date?
   @Published var userCPU = 0.0
   @Published var systemCPU = 0.0
@@ -196,16 +191,9 @@ final class Collector: @unchecked Sendable {
     let now = Date()
     let dt = max(now.timeIntervalSince(previousDate ?? now), 0.001)
     if let prev = previous {
-      let u = Double(
-        UInt32(truncatingIfNeeded: snapshot.system.user) &- UInt32(truncatingIfNeeded: prev.user))
-      let s = Double(
-        UInt32(truncatingIfNeeded: snapshot.system.system)
-          &- UInt32(truncatingIfNeeded: prev.system))
-      let i = Double(
-        UInt32(truncatingIfNeeded: snapshot.system.idle) &- UInt32(truncatingIfNeeded: prev.idle))
-      let total = max(1, u + s + i)
-      userCPU = u / total * 100
-      systemCPU = s / total * 100
+      let cpu = CPUAccounting.systemPercent(current: snapshot.system, previous: prev)
+      userCPU = cpu.user
+      systemCPU = cpu.system
       receiveRate =
         Double(
           snapshot.system.received >= prev.received ? snapshot.system.received - prev.received : 0)

@@ -7,18 +7,19 @@ struct MonitorOverview: View {
   let theme: MonitorTheme
   var used: UInt64 { monitor.system.active + monitor.system.wired + monitor.system.compressed }
   var appCPU: Double { monitor.rows.filter(\.isApp).reduce(0) { $0 + $1.cpu } }
+  var width: CGFloat = 1068
+  var expanded = false
   var body: some View {
     if metric == .gpu {
-      GPUOverview(range: range, theme: theme)
+      GPUOverview(range: range, theme: theme, width: width, expanded: expanded)
     } else {
-      GeometryReader { g in
-        let unit = (g.size.width - 28) / 3.82
-        HStack(spacing: 14) {
-          DesignCard(theme: theme, padding: 19) { chartCard }.frame(width: unit * 1.82)
-          DesignCard(theme: theme) { middleCard }.frame(width: unit)
-          DesignCard(theme: theme) { lastCard }.frame(width: unit)
-        }
-      }.frame(height: 213)
+      AdaptiveOverviewPanels(width: width, expanded: expanded, theme: theme) {
+        chartCard
+      } detail: {
+        middleCard
+      } context: {
+        lastCard
+      }
     }
   }
   var chartCard: some View {
@@ -37,7 +38,7 @@ struct MonitorOverview: View {
           VStack(alignment: .leading, spacing: 3) {
             Text(
               metric == .cpu
-                ? "CPU load" : metric == .memory ? "Memory pressure" : "Application CPU load"
+                ? "Total CPU load" : metric == .memory ? "Memory pressure" : "Application CPU load"
             ).font(.system(size: 12)).foregroundStyle(theme.secondary)
             HStack(alignment: .firstTextBaseline, spacing: 4) {
               Text(
@@ -49,7 +50,7 @@ struct MonitorOverview: View {
                 .foregroundStyle(theme.secondary)
               Text(
                 metric == .cpu
-                  ? "in use"
+                  ? "of total capacity"
                   : metric == .memory ? "used of \(bytes(monitor.system.physical))" : "CPU workload"
               ).font(.system(size: 11)).foregroundStyle(theme.secondary).padding(.leading, 4)
             }
@@ -75,6 +76,9 @@ struct MonitorOverview: View {
         physical: Double(monitor.system.physical)
       ).padding(.top, 10)
     }.monospacedDigit()
+      .help(
+        metric == .cpu
+          ? CPUAccounting.systemHelp : metric == .energy ? CPUAccounting.processHelp : "")
   }
   @ViewBuilder var middleCard: some View {
     switch metric {
@@ -360,132 +364,17 @@ func shortCount(_ value: UInt64) -> String {
 }
 
 struct HistoryPlot: View {
+  @EnvironmentObject var monitor: Monitor
   let points: [Point]
   let metric: Metric
   let range: Int
   let theme: MonitorTheme
   let physical: Double
-  @State private var hover: CGFloat?
   var body: some View {
-    GeometryReader { g in
-      let width = max(1, g.size.width - 32)
-      let height = max(1, g.size.height - 18)
-      let end = points.last?.date ?? Date()
-      let start = end.addingTimeInterval(Double(-range * 60))
-      let visible = points.filter { $0.date >= start }
-      let mirrored = metric == .disk || metric == .network
-      let maxValue =
-        metric == .cpu
-        ? 100
-        : metric == .memory
-          ? 1
-          : max(1, (visible.map { metric == .energy ? $0.a : max($0.a, $0.b) }.max() ?? 1) * 1.15)
-      ZStack(alignment: .topLeading) {
-        Canvas { ctx, size in
-          for i in 0...2 {
-            let y = CGFloat(i) * height / 2
-            var path = Path()
-            path.move(to: CGPoint(x: 0, y: y))
-            path.addLine(to: CGPoint(x: width, y: y))
-            ctx.stroke(
-              path, with: .color(theme.border), style: StrokeStyle(lineWidth: 1, dash: [3, 4]))
-          }
-          let baseline = mirrored ? height / 2 : height
-          func coords(_ second: Bool) -> [CGPoint] {
-            visible.map { p in
-              let value: Double
-              if metric == .memory {
-                value = p.b == 4 ? 0.85 : p.b == 2 ? 0.5 : p.b == 1 ? 0.3 : 0
-              } else if metric == .cpu {
-                value = second ? p.b : p.a + p.b
-              } else {
-                value = second ? p.b : p.a
-              }
-              let x = p.date.timeIntervalSince(start) / Double(range * 60) * width
-              let y =
-                mirrored
-                ? baseline + (second ? 1 : -1) * CGFloat(value / maxValue) * height / 2
-                : height - CGFloat(value / maxValue) * height
-              return CGPoint(x: x, y: y)
-            }
-          }
-          func draw(_ values: [CGPoint], _ color: Color) {
-            guard let first = values.first, let last = values.last else { return }
-            var line = Path()
-            line.move(to: first)
-            for point in values.dropFirst() { line.addLine(to: point) }
-            var area = line
-            area.addLine(to: CGPoint(x: last.x, y: baseline))
-            area.addLine(to: CGPoint(x: first.x, y: baseline))
-            area.closeSubpath()
-            ctx.fill(area, with: .color(color.opacity(0.16)))
-            ctx.stroke(
-              line, with: .color(color),
-              style: StrokeStyle(lineWidth: 1.5, lineCap: .round, lineJoin: .round))
-          }
-          draw(
-            coords(false),
-            metric == .memory
-              ? (visible.last?.b == 2
-                ? theme.amber : visible.last?.b == 4 ? theme.coral : theme.green) : theme.blue)
-          if metric == .cpu || mirrored { draw(coords(true), theme.coral) }
-          if let hover {
-            var line = Path()
-            line.move(to: CGPoint(x: min(width, hover), y: 0))
-            line.addLine(to: CGPoint(x: min(width, hover), y: height))
-            ctx.stroke(
-              line, with: .color(theme.tertiary.opacity(0.5)),
-              style: StrokeStyle(lineWidth: 1, dash: [3, 3]))
-          }
-        }
-        VStack {
-          Text(metric == .memory ? "High" : metric == .cpu ? "100%" : shortAxis(maxValue))
-          Spacer()
-          Text(
-            metric == .memory
-              ? "Med" : mirrored ? "0" : metric == .cpu ? "50%" : shortAxis(maxValue / 2))
-          Spacer()
-          Text(metric == .memory ? "Low" : mirrored ? "−" + shortAxis(maxValue) : "0")
-        }.font(.system(size: 8)).foregroundStyle(theme.tertiary).frame(
-          width: 28, height: height, alignment: .trailing
-        ).offset(x: width + 4)
-        HStack {
-          Text("−\(range*60) sec")
-          Spacer()
-          Text("−\(range*30) sec")
-          Spacer()
-          Text("Now")
-        }.font(.system(size: 8)).foregroundStyle(theme.tertiary).frame(width: width).offset(
-          y: height + 6)
-        if let hover,
-          let point = visible.min(by: {
-            abs($0.date.timeIntervalSince(start) / Double(range * 60) * width - hover)
-              < abs($1.date.timeIntervalSince(start) / Double(range * 60) * width - hover)
-          })
-        {
-          Text(
-            metric == .memory
-              ? (point.b == 1 ? "Normal" : point.b == 2 ? "Moderate" : "High")
-              : metric == .cpu || metric == .energy
-                ? String(format: "%.1f%%", metric == .cpu ? point.a + point.b : point.a)
-                : bytes(UInt64(max(0, point.a))) + "/s"
-          ).font(.system(size: 10)).padding(6).background(
-            theme.subtle, in: RoundedRectangle(cornerRadius: 5)
-          ).offset(x: min(max(0, hover - 30), max(0, width - 85)), y: 3)
-        }
-      }.onContinuousHover { phase in
-        switch phase {
-        case .active(let location): hover = location.x
-        case .ended: hover = nil
-        }
-      }
-    }.accessibilityElement(children: .ignore).accessibilityLabel(
-      "\(metric.rawValue) history over \(range) minutes")
-  }
-  func shortAxis(_ value: Double) -> String {
-    if metric == .energy { return String(Int(value)) }
-    let part = byteParts(UInt64(max(0, value)))
-    return String(format: "%.0f", Double(part.0) ?? 0) + String(part.1.prefix(1))
+    TelemetryChart(
+      samples: TelemetryData.samples(
+        points: points, metric: metric, maximumGap: max(10, monitor.interval * 2.5)),
+      metric: metric, range: range, end: points.last?.date ?? Date(), theme: theme)
   }
 }
 struct BatterySparkline: View {

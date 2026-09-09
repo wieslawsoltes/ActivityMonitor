@@ -34,6 +34,7 @@ struct MonitorInspector: View {
             }.padding(.bottom, 22)
             HStack(spacing: 9) {
               hero("CPU usage", p.accessible ? String(format: "%.1f", p.cpu) : "—", "%")
+                .help(CPUAccounting.processHelp)
               hero(
                 "Memory", p.accessible ? byteParts(p.memory).0 : "—",
                 p.accessible ? byteParts(p.memory).1 : "")

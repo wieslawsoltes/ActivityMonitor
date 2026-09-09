@@ -7,43 +7,58 @@ struct DesignGallery: View {
   @State private var previewRows: [ProcessRow] = []
   @State private var gpuRows: [ProcessRow] = []
   var body: some View {
-    VStack(spacing: 0) {
-      HStack {
-        VStack(alignment: .leading, spacing: 7) {
-          Text("ACTIVITY MONITOR / DESIGN COLLECTION").font(.system(size: 9, weight: .semibold))
-            .tracking(1.8).foregroundStyle(Color(hex: 0x4086f7))
-          Text("Six perspectives. Two appearances.").font(.system(size: 26, weight: .semibold))
-            .tracking(-0.8)
-          Text("Live previews. Choose a view and appearance to open it.").font(.system(size: 12))
-            .foregroundStyle(.secondary)
-        }
-        Spacer()
-        Button("Back to monitor", action: close).buttonStyle(.bordered)
-      }.padding(28)
-      Divider()
-      ScrollView {
-        VStack(alignment: .leading, spacing: 24) {
-          ForEach(Metric.allCases) { metric in
-            VStack(alignment: .leading, spacing: 10) {
-              Text(metric.rawValue).font(.system(size: 15, weight: .semibold))
-              HStack(spacing: 18) {
-                preview(metric, false)
-                preview(metric, true)
+    GeometryReader { geometry in
+      VStack(spacing: 0) {
+        HStack {
+          VStack(alignment: .leading, spacing: 7) {
+            Text("ACTIVITY MONITOR / DESIGN COLLECTION").font(.system(size: 9, weight: .semibold))
+              .tracking(1.8).foregroundStyle(Color(hex: 0x4086f7))
+            Text("Six perspectives. Two appearances.").font(.system(size: 20, weight: .semibold))
+              .tracking(-0.8)
+            Text("Live previews. Choose a view and appearance to open it.").font(.system(size: 12))
+              .foregroundStyle(.secondary)
+          }
+          Spacer()
+          Button("Back to monitor", action: close).buttonStyle(.bordered)
+        }.padding(28)
+        Divider()
+        ScrollView {
+          VStack(alignment: .leading, spacing: 24) {
+            ForEach(Metric.allCases) { metric in
+              VStack(alignment: .leading, spacing: 10) {
+                Text(metric.rawValue).font(.system(size: 15, weight: .semibold))
+                LazyVGrid(
+                  columns: [
+                    GridItem(.adaptive(minimum: min(320, max(280, geometry.size.width - 56))))
+                  ], spacing: 18
+                ) {
+                  preview(
+                    metric, false,
+                    width: geometry.size.width < 740
+                      ? geometry.size.width - 56 : (geometry.size.width - 74) / 2)
+                  preview(
+                    metric, true,
+                    width: geometry.size.width < 740
+                      ? geometry.size.width - 56 : (geometry.size.width - 74) / 2)
+                }
               }
             }
-          }
-        }.padding(28)
+          }.padding(28)
+        }
       }
-    }.frame(width: 1080, height: 760)
-      .onReceive(monitor.$rows) { rows in
-        gpuRows = Array(
-          ProcessQuery(
-            metric: .gpu, query: "", filter: "All processes", sort: "primary", descending: true
-          ).apply(rows).prefix(3))
-        previewRows = Array(rows.sorted { $0.cpu > $1.cpu }.prefix(3))
-      }
+    }.frame(
+      width: min(1080, max(390, (NSApp.mainWindow?.frame.width ?? 1130) - 30)),
+      height: min(760, max(430, (NSApp.mainWindow?.frame.height ?? 800) - 30))
+    )
+    .onReceive(monitor.$rows) { rows in
+      gpuRows = Array(
+        ProcessQuery(
+          metric: .gpu, query: "", filter: "All processes", sort: "primary", descending: true
+        ).apply(rows).prefix(3))
+      previewRows = Array(rows.sorted { $0.cpu > $1.cpu }.prefix(3))
+    }
   }
-  func preview(_ metric: Metric, _ dark: Bool) -> some View {
+  func preview(_ metric: Metric, _ dark: Bool, width: CGFloat) -> some View {
     let theme = MonitorTheme(dark: dark)
     return Button {
       select(metric, dark ? "Dark" : "Light")
@@ -59,8 +74,8 @@ struct DesignGallery: View {
           }
           MonitorOverview(metric: metric, range: 1, theme: theme).environmentObject(monitor).frame(
             width: 1260, height: 213
-          ).scaleEffect(0.365, anchor: .topLeading).frame(
-            width: 460, height: 78, alignment: .topLeading)
+          ).scaleEffect((width - 28) / 1260, anchor: .topLeading).frame(
+            width: width - 28, height: 213 * (width - 28) / 1260, alignment: .topLeading)
           VStack(spacing: 0) {
             ForEach(
               Array((metric == .gpu ? gpuRows : previewRows).enumerated()),
