@@ -43,7 +43,14 @@ struct MonitorInspector: View {
               detail("User", p.user)
               detail("Threads", p.accessible ? String(p.threads) : "—")
               detail("CPU time", p.accessible ? duration(p.cpuTime) : "—")
-              detail("GPU usage", "—")
+              detail("GPU usage", gpuPercent(p.gpuPercent) + (p.gpuPercent == nil ? "" : "%"))
+              detail("Observed GPU time", gpuDuration(p.gpuTime))
+              Text(
+                p.gpuAvailability
+                  + ". Observed time covers this session. Execution-time rates can exceed 100% when GPU work overlaps."
+              )
+              .font(.system(size: 10)).foregroundStyle(theme.tertiary).fixedSize(
+                horizontal: false, vertical: true)
               detail("Kind", p.kind)
               detail("Parent PID", String(p.parent))
               HStack {

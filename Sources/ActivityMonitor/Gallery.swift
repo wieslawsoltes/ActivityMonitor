@@ -5,13 +5,14 @@ struct DesignGallery: View {
   let select: (Metric, String) -> Void
   let close: () -> Void
   @State private var previewRows: [ProcessRow] = []
+  @State private var gpuRows: [ProcessRow] = []
   var body: some View {
     VStack(spacing: 0) {
       HStack {
         VStack(alignment: .leading, spacing: 7) {
           Text("ACTIVITY MONITOR / DESIGN COLLECTION").font(.system(size: 9, weight: .semibold))
             .tracking(1.8).foregroundStyle(Color(hex: 0x4086f7))
-          Text("Five perspectives. Two appearances.").font(.system(size: 26, weight: .semibold))
+          Text("Six perspectives. Two appearances.").font(.system(size: 26, weight: .semibold))
             .tracking(-0.8)
           Text("Live previews. Choose a view and appearance to open it.").font(.system(size: 12))
             .foregroundStyle(.secondary)
@@ -35,6 +36,10 @@ struct DesignGallery: View {
       }
     }.frame(width: 1080, height: 760)
       .onReceive(monitor.$rows) { rows in
+        gpuRows = Array(
+          ProcessQuery(
+            metric: .gpu, query: "", filter: "All processes", sort: "primary", descending: true
+          ).apply(rows).prefix(3))
         previewRows = Array(rows.sorted { $0.cpu > $1.cpu }.prefix(3))
       }
   }
@@ -58,14 +63,16 @@ struct DesignGallery: View {
             width: 460, height: 78, alignment: .topLeading)
           VStack(spacing: 0) {
             ForEach(
-              Array(previewRows.enumerated()),
+              Array((metric == .gpu ? gpuRows : previewRows).enumerated()),
               id: \.element.id
             ) { index, p in
               HStack {
                 Text(p.name).lineLimit(1)
                 Spacer()
-                Text(String(format: "%.1f%% CPU", p.cpu))
-                Text(bytes(p.memory)).frame(width: 58, alignment: .trailing)
+                Text(
+                  metric == .gpu
+                    ? gpuPercent(p.gpuPercent) + "% GPU" : String(format: "%.1f%% CPU", p.cpu))
+                Text(p.accessible ? bytes(p.memory) : "—").frame(width: 58, alignment: .trailing)
               }.font(.system(size: 8)).foregroundStyle(theme.secondary).padding(7).background(
                 index % 2 == 0 ? theme.card : theme.subtle)
             }

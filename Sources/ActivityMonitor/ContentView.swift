@@ -44,6 +44,7 @@ struct ContentView: View {
   }
   var heading: String {
     switch metric {
+    case .gpu: return "GPU activity"
     case .cpu: return "CPU activity"
     case .memory: return "Memory, in balance."
     case .energy: return "Every bit of energy."
@@ -53,6 +54,7 @@ struct ContentView: View {
   }
   var subheading: String {
     switch metric {
+    case .gpu: return "Graphics and compute, across your Mac."
     case .cpu: return "A little clarity. A lot of processing power."
     case .memory: return "Understand how your Mac makes room for everything."
     case .energy: return "A closer look at the apps powering your day."
@@ -131,10 +133,10 @@ struct ContentView: View {
         VStack(alignment: .leading, spacing: 18) {
           Text("A clearer view of your Mac").font(.title2.bold())
           Text(
-            "⌘1–5  Switch views\n⌘K  Search processes\nSpace  Pause or resume\n⌘⇧E  Export process CSV\nDouble-click a process to inspect it"
+            "⌘1–6  Switch views\n⌘K  Search processes\nSpace  Pause or resume\n⌘⇧E  Export process CSV\nDouble-click a process to inspect it"
           ).lineSpacing(8)
           Text(
-            "CPU percentages are measured between samples. A process can exceed 100% when using multiple cores. Disk rates include readable processes; network counters aggregate non-loopback interfaces and can include VPN traffic. Restricted process counters may be unavailable."
+            "CPU percentages are measured between samples. A process can exceed 100% when using multiple cores. Disk rates include readable processes; network counters aggregate non-loopback interfaces and can include VPN traffic. Process GPU rates use driver execution-time counters across all reporting devices and can exceed 100% when work overlaps. GPU time is observed during this session. Restricted or unsupported counters appear as —."
           ).foregroundStyle(.secondary)
           Button("Done") { showHelp = false }.keyboardShortcut(.defaultAction)
         }.padding(32).frame(width: 510)
@@ -169,7 +171,7 @@ struct ContentView: View {
     ZStack {
       WindowChrome()
       HStack(spacing: 0) {
-        HStack(spacing: 22) {
+        HStack(spacing: 14) {
           TrafficLights()
           HStack(spacing: 10) {
             BrandMark()
@@ -181,7 +183,24 @@ struct ContentView: View {
             }
           }
         }
-        Spacer(minLength: 0)
+        Spacer(minLength: 12)
+        HStack(spacing: 3) {
+          ForEach(Metric.allCases) { item in
+            Button {
+              selectMetric(item)
+            } label: {
+              HStack(spacing: 7) {
+                Image(systemName: item.icon).font(.system(size: 13)).foregroundStyle(
+                  item == metric ? theme.blue : theme.secondary)
+                Text(item.rawValue).font(.system(size: 13, weight: .medium))
+              }.padding(.horizontal, 10).frame(height: 34)
+            }.buttonStyle(MonitorSegmentButton(theme: theme, active: item == metric))
+              .accessibilityAddTraits(item == metric ? .isSelected : []).help(
+                "\(item.rawValue) · ⌘\(Metric.allCases.firstIndex(of:item)!+1)")
+          }
+        }.padding(4).background(theme.recessed, in: RoundedRectangle(cornerRadius: 11)).overlay(
+          RoundedRectangle(cornerRadius: 11).stroke(theme.separator, lineWidth: 1))
+        Spacer(minLength: 12)
         HStack(spacing: 5) {
           Button {
             monitor.paused.toggle()
@@ -207,6 +226,7 @@ struct ContentView: View {
           Menu {
             Toggle("Show CPU in menu bar", isOn: $showMenuBar)
             Button("Export JSON snapshot…") { monitor.exportJSON(filtered) }
+            Button("Export GPU snapshot & history…") { monitor.exportGPU(filtered) }
             Divider()
             Picker("Update interval", selection: $monitor.interval) {
               Text("Every second").tag(1.0)
@@ -220,22 +240,7 @@ struct ContentView: View {
           }.menuStyle(.borderlessButton).menuIndicator(.hidden).fixedSize()
         }
       }.padding(.horizontal, 23)
-      HStack(spacing: 3) {
-        ForEach(Metric.allCases) { item in
-          Button {
-            selectMetric(item)
-          } label: {
-            HStack(spacing: 7) {
-              Image(systemName: item.icon).font(.system(size: 13)).foregroundStyle(
-                item == metric ? theme.blue : theme.secondary)
-              Text(item.rawValue).font(.system(size: 13, weight: .medium))
-            }.padding(.horizontal, 15).frame(height: 34)
-          }.buttonStyle(MonitorSegmentButton(theme: theme, active: item == metric))
-            .accessibilityAddTraits(item == metric ? .isSelected : []).help(
-              "\(item.rawValue) · ⌘\(Metric.allCases.firstIndex(of:item)!+1)")
-        }
-      }.padding(4).background(theme.recessed, in: RoundedRectangle(cornerRadius: 11)).overlay(
-        RoundedRectangle(cornerRadius: 11).stroke(theme.separator, lineWidth: 1))
+
     }.frame(height: 78).background(theme.toolbar).overlay(alignment: .bottom) {
       Rectangle().fill(theme.border).frame(height: 1)
     }
@@ -259,6 +264,34 @@ struct ContentView: View {
         Text(subheading).font(.system(size: 13)).foregroundStyle(theme.secondary)
       }
       Spacer()
+      if metric == .gpu {
+        Menu {
+          if monitor.gpuDevices.isEmpty { Text("No GPU detected") }
+          ForEach(monitor.gpuDevices) { device in
+            Button {
+              monitor.selectedGPU = device.id
+            } label: {
+              if monitor.gpuDevice?.id == device.id {
+                Label(
+                  device.name + (device.connected ? "" : " · disconnected"),
+                  systemImage: "checkmark")
+              } else {
+                Text(device.name + (device.connected ? "" : " · disconnected"))
+              }
+            }
+          }
+        } label: {
+          HStack(spacing: 8) {
+            Image(systemName: "square.3.layers.3d")
+            Text(monitor.gpuDevice?.name ?? "No GPU detected").lineLimit(1)
+            Image(systemName: "chevron.down").font(.system(size: 8))
+          }.font(.system(size: 11)).foregroundStyle(theme.secondary).padding(.horizontal, 10).frame(
+            height: 28
+          )
+          .overlay(RoundedRectangle(cornerRadius: 6).stroke(theme.border, lineWidth: 1))
+        }.menuStyle(.borderlessButton).menuIndicator(.hidden).fixedSize().help(
+          "Choose GPU for the overview; process counters include all reporting devices")
+      }
       HStack(spacing: 6) {
         Circle().fill(monitor.paused ? theme.secondary : theme.green).frame(width: 5, height: 5)
         Text(monitor.paused ? "Monitoring paused" : "Live monitoring").font(
@@ -286,6 +319,13 @@ struct ContentView: View {
       Text("·").foregroundStyle(theme.tertiary)
       Label(
         monitor.paused ? "Snapshot paused" : "Live system data", systemImage: "waveform.path.ecg")
+      if metric == .gpu {
+        Text("·")
+        Text(
+          "Process GPU counters across all devices · \(monitor.rows.filter { $0.gpuPercent != nil }.count) reporting"
+        )
+        .foregroundStyle(theme.tertiary)
+      }
       if metric == .network || metric == .energy {
         Text("·")
         Text(

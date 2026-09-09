@@ -8,14 +8,18 @@ struct MonitorOverview: View {
   var used: UInt64 { monitor.system.active + monitor.system.wired + monitor.system.compressed }
   var appCPU: Double { monitor.rows.filter(\.isApp).reduce(0) { $0 + $1.cpu } }
   var body: some View {
-    GeometryReader { g in
-      let unit = (g.size.width - 28) / 3.82
-      HStack(spacing: 14) {
-        DesignCard(theme: theme, padding: 19) { chartCard }.frame(width: unit * 1.82)
-        DesignCard(theme: theme) { middleCard }.frame(width: unit)
-        DesignCard(theme: theme) { lastCard }.frame(width: unit)
-      }
-    }.frame(height: 213)
+    if metric == .gpu {
+      GPUOverview(range: range, theme: theme)
+    } else {
+      GeometryReader { g in
+        let unit = (g.size.width - 28) / 3.82
+        HStack(spacing: 14) {
+          DesignCard(theme: theme, padding: 19) { chartCard }.frame(width: unit * 1.82)
+          DesignCard(theme: theme) { middleCard }.frame(width: unit)
+          DesignCard(theme: theme) { lastCard }.frame(width: unit)
+        }
+      }.frame(height: 213)
+    }
   }
   var chartCard: some View {
     VStack(alignment: .leading, spacing: 0) {
@@ -74,6 +78,7 @@ struct MonitorOverview: View {
   }
   @ViewBuilder var middleCard: some View {
     switch metric {
+    case .gpu: EmptyView()
     case .cpu:
       VStack(alignment: .leading, spacing: 0) {
         title("Usage breakdown")
@@ -163,6 +168,7 @@ struct MonitorOverview: View {
   }
   @ViewBuilder var lastCard: some View {
     switch metric {
+    case .gpu: EmptyView()
     case .cpu:
       VStack(alignment: .leading, spacing: 23) {
         HStack {

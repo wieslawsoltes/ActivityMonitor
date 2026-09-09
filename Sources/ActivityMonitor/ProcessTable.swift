@@ -26,6 +26,16 @@ struct MonitorProcessTable: View {
   var columns: [ProcessColumn] {
     var values: [ProcessColumn]
     switch metric {
+    case .gpu:
+      values = [
+        .init(id: "primary", title: "% GPU", weight: 0.85),
+        .init(id: "gpuTime", title: "GPU time", weight: 1.35),
+        .init(id: "cpu", title: "% CPU", weight: 0.8),
+        .init(id: "memory", title: "Memory", weight: 1.1),
+        .init(id: "kind", title: "Kind", weight: 0.8),
+        .init(id: "pid", title: "PID", weight: 0.8),
+        .init(id: "user", title: "User", weight: 1.1),
+      ]
     case .cpu:
       values = [
         .init(id: "primary", title: "% CPU", weight: 0.85),
@@ -72,7 +82,7 @@ struct MonitorProcessTable: View {
     }
     return values.filter {
       ($0.id != "threads" || showThreads) && ($0.id != "user" || showUser)
-        && ($0.id != "time" || showTime)
+        && (!["time", "gpuTime"].contains($0.id) || showTime)
     }
   }
   var minTableWidth: CGFloat { metric == .disk ? 720 : metric == .energy ? 850 : 1000 }
@@ -190,7 +200,7 @@ struct MonitorProcessTable: View {
         Image(systemName: "info.circle")
       }.buttonStyle(MonitorIconButton(theme: theme, active: inspector)).help("Process details")
       Menu {
-        Toggle("CPU time", isOn: $showTime)
+        Toggle(metric == .gpu ? "GPU time" : "CPU time", isOn: $showTime)
         Toggle("Threads", isOn: $showThreads)
         Toggle("User", isOn: $showUser)
         Divider()
@@ -248,11 +258,16 @@ struct MonitorProcessTable: View {
         .frame(height: 36).contentShape(Rectangle())
     }.buttonStyle(MonitorSegmentButton(theme: theme, radius: 0)).help(
       unavailableColumn(key)
-        ? "This metric is not exposed by public macOS APIs." : "Sort by \(title)"
+        ? "This metric is not exposed by public macOS APIs."
+        : key == "gpuTime"
+          ? "Sort by GPU execution time observed during this session"
+          : key == "gpu" || (key == "primary" && metric == .gpu)
+            ? "Sort by GPU execution-time rate across all reporting devices; overlapping work can exceed 100%"
+            : "Sort by \(title)"
     ).disabled(unavailableColumn(key))
   }
   func unavailableColumn(_ key: String) -> Bool {
-    ["gpu", "ports", "nap", "sleep", "packetsIn", "packetsOut"].contains(key)
+    ["ports", "nap", "sleep", "packetsIn", "packetsOut"].contains(key)
   }
   func move(_ delta: Int) {
     guard !rows.isEmpty else { return }
@@ -303,20 +318,22 @@ private struct ProcessTableRow: View, Equatable {
         if isSelected { Rectangle().fill(theme.blue).frame(width: 2) }
       }.overlay(alignment: .bottom) { Rectangle().fill(theme.separator).frame(height: 1) }
         .contentShape(Rectangle())
-    }.buttonStyle(.plain).focusEffectDisabled().onHover { hovered = $0 }.help(row.name)
-      .simultaneousGesture(TapGesture(count: 2).onEnded { inspect(row) }).contextMenu {
-        Button("Inspect") { inspect(row) }
-        Button("Copy PID") {
-          NSPasteboard.general.clearContents()
-          NSPasteboard.general.setString(String(row.id), forType: .string)
-        }
-        Button("Quit…", role: .destructive) { stop(row) }.disabled(
-          row.uid != getuid() || row.id <= 1 || row.id == getpid())
-      }.accessibilityLabel("\(row.name), PID \(row.id)").accessibilityValue(
-        columns.map { $0.title + ": " + text(row, $0.id) }.joined(separator: ", ")
-      ).accessibilityAction(named: "Inspect") {
-        inspect(row)
+    }.buttonStyle(.plain).focusEffectDisabled().onHover { hovered = $0 }.help(
+      row.name + "\n" + row.gpuAvailability
+    )
+    .simultaneousGesture(TapGesture(count: 2).onEnded { inspect(row) }).contextMenu {
+      Button("Inspect") { inspect(row) }
+      Button("Copy PID") {
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(String(row.id), forType: .string)
       }
+      Button("Quit…", role: .destructive) { stop(row) }.disabled(
+        row.uid != getuid() || row.id <= 1 || row.id == getpid())
+    }.accessibilityLabel("\(row.name), PID \(row.id)").accessibilityValue(
+      columns.map { $0.title + ": " + text(row, $0.id) }.joined(separator: ", ")
+    ).accessibilityAction(named: "Inspect") {
+      inspect(row)
+    }
   }
   private var metricCells: some View {
     Canvas { context, size in
@@ -325,7 +342,8 @@ private struct ProcessTableRow: View, Equatable {
       for column in columns {
         let cellWidth = size.width * column.weight / max(1, total)
         let primary = column.id == "primary" || metric == .network && column.id == "received"
-        let highlighted = column.id == "primary" && (metric == .cpu || metric == .memory)
+        let highlighted =
+          column.id == "primary" && (metric == .cpu || metric == .memory || metric == .gpu)
         let color = highlighted ? theme.blue : primary ? theme.text : theme.secondary
         let label = Text(text(row, column.id))
           .font(
@@ -359,9 +377,12 @@ private struct ProcessTableRow: View, Equatable {
   func text(_ p: ProcessRow, _ key: String) -> String {
     switch key {
     case "primary":
+      if metric == .gpu { return gpuPercent(p.gpuPercent) }
       if metric == .disk { return p.ioAccessible ? bytes(p.written) : "—" }
       return !p.accessible
         ? "—" : metric == .memory ? bytes(p.memory) : String(format: "%.1f", p.cpu)
+    case "gpu": return gpuPercent(p.gpuPercent)
+    case "gpuTime": return gpuDuration(p.gpuTime)
     case "secondary": return p.ioAccessible ? bytes(p.read) : "—"
     case "cpu": return p.accessible ? String(format: "%.1f", p.cpu) : "—"
     case "time": return p.accessible ? duration(p.cpuTime) : "—"

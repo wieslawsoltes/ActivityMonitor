@@ -120,7 +120,7 @@ final class MonitorTests: XCTestCase {
     var row = try XCTUnwrap(Collector().collect().processes.first { $0.id == getpid() })
     row.networkReceived = 1234
     row.networkSent = 5678
-    XCTAssertTrue(processCSV([row]).hasSuffix(",1234,5678"))
+    XCTAssertTrue(processCSV([row]).contains(",1234,5678,"))
   }
 
   func testProcessQueryRefreshesMetricFilterAndDirection() throws {

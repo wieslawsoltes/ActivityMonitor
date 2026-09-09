@@ -15,6 +15,17 @@ struct ProcessQuery: Equatable {
           || filter == "System processes" && p.uid == 0 || filter == "Applications" && p.isApp)
     }.sorted { a, b in
       if a.id == b.id { return false }
+      if sort == "gpu" || sort == "gpuTime" || (sort == "primary" && metric == .gpu) {
+        let av = sort == "gpuTime" ? a.gpuTime : a.gpuPercent
+        let bv = sort == "gpuTime" ? b.gpuTime : b.gpuPercent
+        switch (av, bv) {
+        case (let aValue?, let bValue?):
+          return aValue == bValue ? a.id < b.id : descending ? aValue > bValue : aValue < bValue
+        case (_?, nil): return true
+        case (nil, _?): return false
+        case (nil, nil): return a.id < b.id
+        }
+      }
       let result: Bool
       switch sort {
       case "name":
