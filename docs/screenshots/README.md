@@ -27,3 +27,15 @@ The focused search field has a blue outline that remains visible in either appea
 ![Search focus](v1.1/focus-light.jpg)
 
 Based on the [original interface design](https://chatgpt.com/share/6a9c6a89-70e0-83eb-a977-4ca6e6f34766).
+
+## Adaptive workspaces and menu-bar monitor
+
+Captured from the 1.3 feature build on September 9, 2026 using real system data.
+
+| Default workspace | Compact workspace |
+| --- | --- |
+| ![Default workspace](adaptive/default.jpg) | ![Compact workspace](adaptive/compact.png) |
+
+| Menu bar · Light | Menu bar · Dark |
+| --- | --- |
+| ![Light menu-bar monitor](adaptive/tray-light.jpg) | ![Dark menu-bar monitor](adaptive/tray-dark.jpg) |

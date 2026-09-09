@@ -35,17 +35,27 @@ Keep an eye on performance, understand resource usage, and find the processes th
 - **Take action.** Quit or force quit your processes, with confirmation before termination.
 - **Follow changes.** Switch between one-, five- and fifteen-minute histories, adjust the refresh interval or pause the view.
 - **Keep a record.** Export process data as CSV or JSON and save diagnostic reports.
-- **Stay informed.** Add the optional CPU monitor to your menu bar.
+- **Stay informed.** Open all six views from your menu bar, with live charts, device details and the busiest processes.
 
 ## Comfortable in any light
 
-Choose light, dark or system appearance. A compact inspector keeps process details alongside the table, while the overview remains visible as you scroll.
+Choose light, dark or system appearance. The process inspector sits beside wide workspaces and opens over compact windows.
 
 ![Activity Monitor in dark appearance](docs/screenshots/v1.1/cpu-dark.jpg)
 
 *Screenshots show the running app with real system data.*
 
 [Explore all six views in both themes](docs/screenshots/README.md).
+
+## Fits your workspace
+
+Keep the familiar three-panel overview at the default size, use a compact window alongside other apps, or expand for larger histories and more process detail. Smaller windows prioritize the chart and key columns, with expandable breakdowns and access to the full column set. Hover over a chart to inspect a sample, or focus it and use the arrow keys.
+
+The menu-bar monitor brings all six views into a compact popover. Change the history range, select a GPU, pause monitoring, or open a process in the main window. Both surfaces share the same live session.
+
+| Compact workspace | Menu bar · Light | Menu bar · Dark |
+| :---: | :---: | :---: |
+| ![Compact Activity Monitor](docs/screenshots/adaptive/compact.png) | ![Menu-bar GPU monitoring in light appearance](docs/screenshots/adaptive/tray-light.jpg) | ![Menu-bar GPU monitoring in dark appearance](docs/screenshots/adaptive/tray-dark.jpg) |
 
 ## A closer look at graphics
 
@@ -83,6 +93,9 @@ To uninstall, quit the app and move it from Applications to the Trash. See [inst
 | **↑ / ↓** | Select a process when the list is focused |
 | **Return / Escape** | Open or close the inspector when the list is focused |
 | **⌘⇧E** | Export all processes as CSV |
+| **⌘⇧M** | Open the menu-bar monitor |
+| **⌘⌥1 / ⌘⌥2 / ⌘⌥3** | Compact / minimum / default window size |
+| **← / →** | Inspect samples when a chart is focused |
 
 The toolbar export button saves the current filtered and sorted list.
 

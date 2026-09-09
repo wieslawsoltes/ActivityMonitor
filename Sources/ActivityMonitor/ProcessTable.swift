@@ -23,7 +23,9 @@ struct MonitorProcessTable: View {
   @AppStorage("showUser") var showUser = true
   @AppStorage("showTime") var showTime = true
   @FocusState var focused: Bool
-  var columns: [ProcessColumn] {
+  @State private var availableWidth: CGFloat = 1200
+  @AppStorage("showAllProcessColumns") private var allColumnsVisible = false
+  var allColumns: [ProcessColumn] {
     var values: [ProcessColumn]
     switch metric {
     case .gpu:
@@ -85,11 +87,23 @@ struct MonitorProcessTable: View {
         && (!["time", "gpuTime"].contains($0.id) || showTime)
     }
   }
-  var minTableWidth: CGFloat { metric == .disk ? 720 : metric == .energy ? 850 : 1000 }
+  var columns: [ProcessColumn] {
+    guard availableWidth < 900, !allColumnsVisible else { return allColumns }
+    return ProcessColumnPolicy.visible(
+      allColumns, metric: metric, width: availableWidth, sort: sort)
+  }
+  var minTableWidth: CGFloat {
+    if availableWidth < 900 && !allColumnsVisible { return availableWidth < 520 ? 360 : 500 }
+    return metric == .disk ? 720 : metric == .energy ? 850 : 1000
+  }
   var body: some View {
     GeometryReader { g in
       VStack(spacing: 0) {
-        toolbar.frame(height: 61)
+        if g.size.width >= 900 {
+          toolbar.frame(height: 61)
+        } else {
+          compactToolbar.frame(height: 96)
+        }
         Rectangle().fill(theme.separator).frame(height: 1)
         let width = max(minTableWidth, g.size.width)
         ScrollView(.horizontal) {
@@ -129,8 +143,10 @@ struct MonitorProcessTable: View {
                   return .handled
                 }
             }
-          }.frame(width: width, height: max(100, g.size.height - 62))
+          }.frame(width: width, height: max(100, g.size.height - (g.size.width >= 900 ? 62 : 97)))
         }.scrollIndicators(.automatic)
+          .onAppear { availableWidth = g.size.width }
+          .onChange(of: g.size.width) { availableWidth = g.size.width }
       }.background(theme.card).clipShape(
         UnevenRoundedRectangle(topLeadingRadius: 14, topTrailingRadius: 14)
       ).overlay(
@@ -218,12 +234,94 @@ struct MonitorProcessTable: View {
       }.menuStyle(.borderlessButton).menuIndicator(.hidden).fixedSize().help("Choose columns")
     }.padding(.horizontal, 18)
   }
+  var compactToolbar: some View {
+    VStack(spacing: 8) {
+      HStack(spacing: 8) {
+        Text("\(rows.count) processes").font(.system(size: 12, weight: .semibold))
+        Spacer(minLength: 0)
+        Menu {
+          Picker("Process filter", selection: $filter) {
+            ForEach(
+              ["All processes", "My processes", "System processes", "Applications"], id: \.self
+            ) { Text($0).tag($0) }
+          }
+        } label: {
+          Image(systemName: "line.3.horizontal.decrease.circle")
+        }
+        .menuStyle(.borderlessButton).fixedSize().help("Filter: \(filter)")
+        Menu {
+          Button("Process name") {
+            sort = "name"
+            descending = false
+          }
+          ForEach(allColumns.filter { !unavailableColumn($0.id) }) { column in
+            Button(column.title) {
+              sort = column.id
+              descending = true
+            }
+          }
+          Divider()
+          Toggle("Descending", isOn: $descending)
+        } label: {
+          Image(systemName: "arrow.up.arrow.down")
+        }
+        .menuStyle(.borderlessButton).fixedSize().help("Sort processes")
+        Menu {
+          Toggle("Show all columns", isOn: $allColumnsVisible)
+          Toggle(metric == .gpu ? "GPU time" : "CPU time", isOn: $showTime)
+          Toggle("Threads", isOn: $showThreads)
+          Toggle("User", isOn: $showUser)
+          Button("Restore columns") {
+            allColumnsVisible = false
+            showTime = true
+            showThreads = true
+            showUser = true
+          }
+        } label: {
+          Image(systemName: "rectangle.split.3x1")
+        }
+        .menuStyle(.borderlessButton).fixedSize().help("Choose columns")
+      }
+      HStack(spacing: 6) {
+        HStack(spacing: 6) {
+          Image(systemName: "magnifyingglass").foregroundStyle(theme.tertiary)
+          TextField("Search processes", text: $query).textFieldStyle(.plain).focused(searchFocus)
+          if !query.isEmpty {
+            Button {
+              query = ""
+            } label: {
+              Image(systemName: "xmark.circle.fill")
+            }.buttonStyle(.plain).help("Clear search")
+          }
+        }.font(.system(size: 11)).padding(.horizontal, 9).frame(height: 30)
+          .background(theme.subtle, in: RoundedRectangle(cornerRadius: 6))
+          .overlay(
+            RoundedRectangle(cornerRadius: 6).stroke(
+              searchFocus.wrappedValue ? theme.blue : theme.border, lineWidth: 1))
+        Button {
+          if let row = rows.first(where: { $0.id == selection }) { stop(row) }
+        } label: {
+          Image(systemName: "xmark.octagon")
+        }
+        .buttonStyle(MonitorIconButton(theme: theme)).disabled(!canStop).help(
+          "Quit selected process")
+        Button {
+          inspector.toggle()
+        } label: {
+          Image(systemName: "info.circle")
+        }
+        .buttonStyle(MonitorIconButton(theme: theme, active: inspector)).help("Process details")
+      }
+    }.padding(.horizontal, 14)
+  }
   var canStop: Bool {
     guard let row = rows.first(where: { $0.id == selection }) else { return false }
     return row.uid == getuid() && row.id > 1 && row.id != getpid()
   }
   func nameWidth(_ width: CGFloat) -> CGFloat {
-    metric == .disk ? width * 0.39 : metric == .energy ? width * 0.30 : width * 0.27
+    width < 900
+      ? width * (width < 520 ? 0.48 : 0.34)
+      : metric == .disk ? width * 0.39 : metric == .energy ? width * 0.30 : width * 0.27
   }
   func cellWidth(_ column: ProcessColumn, _ width: CGFloat) -> CGFloat {
     (width - nameWidth(width)) * column.weight / columns.reduce(0) { $0 + $1.weight }
@@ -294,7 +392,9 @@ private struct ProcessTableRow: View, Equatable {
       && lhs.columns == rhs.columns && lhs.isSelected == rhs.isSelected
   }
   func nameWidth(_ width: CGFloat) -> CGFloat {
-    metric == .disk ? width * 0.39 : metric == .energy ? width * 0.30 : width * 0.27
+    width < 900
+      ? width * (width < 520 ? 0.48 : 0.34)
+      : metric == .disk ? width * 0.39 : metric == .energy ? width * 0.30 : width * 0.27
   }
   func cellWidth(_ column: ProcessColumn, _ width: CGFloat) -> CGFloat {
     (width - nameWidth(width)) * column.weight / columns.reduce(0) { $0 + $1.weight }
@@ -396,5 +496,20 @@ private struct ProcessTableRow: View, Equatable {
     case "user": return p.user
     default: return "—"
     }
+  }
+}
+
+/// Retain the selected sort column so resizing never hides the meaning of the current ordering.
+enum ProcessColumnPolicy {
+  static func visible(_ columns: [ProcessColumn], metric: Metric, width: CGFloat, sort: String)
+    -> [ProcessColumn]
+  {
+    var keys: Set<String> = [metric == .network ? "received" : "primary", "pid", sort]
+    if width >= 520 {
+      keys.insert(
+        metric == .gpu
+          ? "gpuTime" : metric == .network ? "sent" : metric == .disk ? "secondary" : "memory")
+    }
+    return columns.filter { keys.contains($0.id) }
   }
 }
