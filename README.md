@@ -69,7 +69,7 @@ GPU availability depends on your Mac and its driver. Process counters cover all 
 
 ## Smoother everyday monitoring
 
-Tabs respond across their full bounds. Clear hover, press and search-focus feedback makes controls easier to use, while a lighter process table reduces the work needed to switch views. Sampling stays at the same frequency. See the [profiling results](docs/performance/README.md).
+Tabs respond across their full bounds. Clear hover, press and search-focus feedback makes controls easier to use, while a lighter process table reduces the work needed to switch views. Monitoring updates every second by default, with two- and five-second options. See the [profiling results](docs/performance/README.md).
 
 ## Installation
 
@@ -102,6 +102,8 @@ The toolbar export button saves the current filtered and sorted list.
 ## Your data stays on your Mac
 
 No accounts, telemetry or uploads. Reports and exports are saved to a location you choose. No administrator helper is installed.
+
+The CPU overview measures total capacity on a 0–100% scale. Process CPU percentages use 100% per logical processor and can exceed 100%.
 
 macOS restricts some process information; unavailable values appear as **—**. The Energy view shows **CPU workload**, not Apple’s proprietary Energy Impact score. GPU counters appear where the graphics driver exposes them; per-process packet counts remain unavailable. Disk totals cover readable processes; network totals can differ from individual process counters. Histories begin at launch and stay in memory for up to fifteen minutes.
 

@@ -38,7 +38,7 @@ struct MonitorOverview: View {
           VStack(alignment: .leading, spacing: 3) {
             Text(
               metric == .cpu
-                ? "CPU load" : metric == .memory ? "Memory pressure" : "Application CPU load"
+                ? "Total CPU load" : metric == .memory ? "Memory pressure" : "Application CPU load"
             ).font(.system(size: 12)).foregroundStyle(theme.secondary)
             HStack(alignment: .firstTextBaseline, spacing: 4) {
               Text(
@@ -50,7 +50,7 @@ struct MonitorOverview: View {
                 .foregroundStyle(theme.secondary)
               Text(
                 metric == .cpu
-                  ? "in use"
+                  ? "of total capacity"
                   : metric == .memory ? "used of \(bytes(monitor.system.physical))" : "CPU workload"
               ).font(.system(size: 11)).foregroundStyle(theme.secondary).padding(.leading, 4)
             }
@@ -76,6 +76,9 @@ struct MonitorOverview: View {
         physical: Double(monitor.system.physical)
       ).padding(.top, 10)
     }.monospacedDigit()
+      .help(
+        metric == .cpu
+          ? CPUAccounting.systemHelp : metric == .energy ? CPUAccounting.processHelp : "")
   }
   @ViewBuilder var middleCard: some View {
     switch metric {

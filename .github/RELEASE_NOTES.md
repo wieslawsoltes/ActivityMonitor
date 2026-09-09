@@ -6,6 +6,7 @@ Activity Monitor 1.3 brings responsive workspaces and a complete menu-bar monito
 - **A full menu-bar monitor:** live CPU, memory, energy, disk, network and GPU charts, history ranges, GPU selection, top processes, pause and appearance controls. Open any listed process in the main inspector.
 - **Interactive histories:** hover for timestamped values, or focus a chart and use the arrow keys. Missing observations remain gaps.
 - **Compact process controls:** search, filter, sort and choose columns at smaller sizes, with access to the full column set.
+- **Clearer CPU readings:** total-capacity labels explain the overview’s 0–100% scale, while process values retain 100% per logical processor and can exceed 100%. Monitoring now defaults to one-second updates; two- and five-second options remain available.
 - **Window shortcuts:** Command–Option–1/2/3 selects compact, minimum or default size; Command–Shift–M opens the menu-bar monitor.
 
 | Light | Dark |

@@ -71,7 +71,8 @@ struct TrayLifecycle: View {
     guard let button = item?.button else { return }
     button.image = MenuBarGlyph.image(monitor.histories[.cpu] ?? [], paused: monitor.paused)
     button.title = String(format: " %.0f%%", monitor.userCPU + monitor.systemCPU)
-    button.toolTip = "Activity Monitor · CPU" + button.title + (monitor.paused ? " · Paused" : "")
+    button.toolTip =
+      "Activity Monitor · Total CPU capacity" + button.title + (monitor.paused ? " · Paused" : "")
     button.setAccessibilityLabel(button.toolTip)
   }
   @objc func togglePopover() {

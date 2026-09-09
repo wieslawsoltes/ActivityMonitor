@@ -186,8 +186,11 @@ struct TelemetryChart: View {
       selection.isEmpty
         ? latestValue : selection.map { label($0) + " " + value($0.value) }.joined(separator: ", ")
     )
-    .accessibilityHint(
-      "Hover to inspect. Focus and use left or right arrow keys to inspect samples.")
+    .accessibilityHint(inspectionHint)
+  }
+  private var inspectionHint: String {
+    "Hover to inspect. Focus and use left or right arrow keys to inspect samples."
+      + (metric == .cpu ? " " + CPUAccounting.systemHelp : "")
   }
   private var latestValue: String {
     guard let latest = visible.last else { return "No readable samples" }

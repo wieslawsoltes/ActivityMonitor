@@ -2,7 +2,7 @@
 
 Process enumeration uses `KERN_PROC_ALL`; protected processes remain listed even when macOS denies access to detailed counters. Such counters display **—**, and CSV exports leave the corresponding cells empty. JSON includes `accessible` and `ioAccessible` flags; ignore numerical placeholders when the relevant flag is false. Some protected process names are truncated by the kernel.
 
-Process CPU time is converted from Mach absolute ticks to seconds using the machine's timebase. CPU percentage is a delta over the sampling interval and may exceed 100% for multi-core processes. The first sample has no CPU/rate baseline. System CPU is normalized over all processors. Thread counts cover readable processes.
+Process CPU time is converted from Mach absolute ticks to seconds using the machine's timebase. CPU percentage is a delta over the sampling interval and may exceed 100% for multi-core processes. The first sample has no CPU/rate baseline. The CPU overview and menu-bar percentage measure **total CPU capacity**, normalized to 0–100% across all logical processors; User + System + Idle = 100%. This matches [Apple’s system CPU summary](https://support.apple.com/guide/activity-monitor/view-cpu-activity-actmntr43452/mac). Process percentages instead use 100% per logical processor: a process can use 400% on four logical processors or 1000% on ten. For example, 250% is 2.5 logical processors’ worth of CPU time, equivalent to 25% of a ten-processor machine’s total capacity. Neither process values nor the application CPU workload chart are capped at 100%. Thread counts cover readable processes.
 
 Memory used is active + wired + compressed physical pages. Inactive pages are shown separately as cached/inactive. These categories are not a reproduction of Apple's private App Memory accounting. Process memory prefers physical footprint, falling back to resident size. Shared pages mean process totals do not necessarily sum to physical usage.
 
@@ -29,3 +29,7 @@ Registry properties are **driver-defined, not a documented cross-vendor telemetr
 CSV appends `GPU %` and `Observed GPU seconds`, leaving unavailable cells blank. Process JSON includes optional `gpuPercent` / `gpuTime` and the `gpuWaiting` state independently of CPU access. “Export GPU snapshot & history…” includes all device details, histories, the selected device, the filtered process list, capture time, units and scope.
 
 See [GPU validation](GPU_VALIDATION.md) for hardware evidence, reproduction and limits.
+
+## Refresh interval
+
+Monitoring defaults to one-second updates. Two- and five-second options remain available in the main window and menu-bar settings. Collection runs sequentially in the background; actual sample spacing includes collection time. Rates use measured elapsed time. Per-process network accounting retains its separate five-second refresh.

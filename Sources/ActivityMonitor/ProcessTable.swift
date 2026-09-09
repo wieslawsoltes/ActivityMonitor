@@ -361,7 +361,9 @@ struct MonitorProcessTable: View {
           ? "Sort by GPU execution time observed during this session"
           : key == "gpu" || (key == "primary" && metric == .gpu)
             ? "Sort by GPU execution-time rate across all reporting devices; overlapping work can exceed 100%"
-            : "Sort by \(title)"
+            : key == "cpu" || (key == "primary" && (metric == .cpu || metric == .energy))
+              ? "Sort by CPU execution-time rate. " + CPUAccounting.processHelp
+              : "Sort by \(title)"
     ).disabled(unavailableColumn(key))
   }
   func unavailableColumn(_ key: String) -> Bool {
