@@ -289,6 +289,12 @@ final class Collector: @unchecked Sendable {
     if kill(row.id, force ? SIGKILL : SIGTERM) != 0 { error = String(cString: strerror(errno)) }
   }
   func exportGPU(_ rows: [ProcessRow]) {
+    // Freeze every field together before the save panel can run another sampling turn.
+    let snapshot = GPUExportSnapshot(
+      capturedAt: lastUpdate, selectedDevice: gpuDevice?.id,
+      devices: gpuDevices,
+      history: Dictionary(
+        uniqueKeysWithValues: gpuHistories.map { (String($0.key), $0.value) }), processes: rows)
     let panel = NSSavePanel()
     panel.nameFieldStringValue = "Activity-Monitor-GPU.json"
     panel.allowedContentTypes = [.json]
@@ -297,11 +303,6 @@ final class Collector: @unchecked Sendable {
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
         encoder.dateEncodingStrategy = .iso8601
-        let snapshot = GPUExportSnapshot(
-          capturedAt: lastUpdate, selectedDevice: gpuDevice?.id,
-          devices: gpuDevices,
-          history: Dictionary(
-            uniqueKeysWithValues: gpuHistories.map { (String($0.key), $0.value) }), processes: rows)
         try encoder.encode(snapshot).write(to: url, options: .atomic)
       } catch { self.error = error.localizedDescription }
     }

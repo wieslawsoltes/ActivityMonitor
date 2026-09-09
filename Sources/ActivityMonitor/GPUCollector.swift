@@ -228,7 +228,10 @@ func gpuPercent(_ value: Double?) -> String {
 }
 func gpuDuration(_ value: Double?) -> String {
   guard let value, value.isFinite, value >= 0, value < Double(Int.max) else { return "—" }
-  let minutes = Int(value) / 60
+  let rounded = (value * 100).rounded() / 100
+  guard rounded < Double(Int.max) else { return "—" }
+  let minutes = Int(rounded) / 60
   return String(
-    format: "%d:%02d:%05.2f", minutes / 60, minutes % 60, value.truncatingRemainder(dividingBy: 60))
+    format: "%d:%02d:%05.2f", minutes / 60, minutes % 60,
+    rounded.truncatingRemainder(dividingBy: 60))
 }

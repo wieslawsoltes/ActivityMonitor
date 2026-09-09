@@ -193,5 +193,7 @@ final class GPUCollectorTests: XCTestCase {
     XCTAssertEqual(a.gpuAvailability, "Waiting for a second GPU sample")
     XCTAssertEqual(gpuDuration(3661.25), "1:01:01.25")
     XCTAssertEqual(gpuDuration(nil), "—")
+    XCTAssertEqual(gpuDuration(59.999), "0:01:00.00")
+    XCTAssertEqual(gpuDuration(3599.999), "1:00:00.00")
   }
 }
