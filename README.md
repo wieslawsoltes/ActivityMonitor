@@ -11,13 +11,13 @@ Keep an eye on performance, understand resource usage, and find the processes th
 ![macOS 14+](https://img.shields.io/badge/macOS-14%2B-20242c)
 ![Apple silicon and Intel](https://img.shields.io/badge/Apple_silicon_%26_Intel-supported-4086f7)
 
-**[Download for macOS](https://github.com/wieslawsoltes/ActivityMonitor/releases/latest)** · [Installation](#installation) · [Features](#five-views-one-clear-picture)
+**[Download for macOS](https://github.com/wieslawsoltes/ActivityMonitor/releases/latest)** · [Installation](#installation) · [Features](#six-views-one-clear-picture)
 
 </div>
 
 ![Activity Monitor in light appearance](docs/screenshots/v1.1/cpu-light.jpg)
 
-## Five views. One clear picture.
+## Six views. One clear picture.
 
 | View | What you can see |
 | :--- | :--- |
@@ -26,6 +26,7 @@ Keep an eye on performance, understand resource usage, and find the processes th
 | **Energy** | Battery charge, charging status, Low Power Mode, thermal state and application CPU workload. |
 | **Disk** | Process reads and writes, transfer totals and current throughput. |
 | **Network** | Incoming and outgoing traffic, packet activity and per-process byte counts. |
+| **GPU** | Device utilization, renderer and tiler activity, GPU memory, and per-process GPU usage and observed time where the driver exposes counters. |
 
 ## Find the detail that matters
 
@@ -44,7 +45,17 @@ Choose light, dark or system appearance. A compact inspector keeps process detai
 
 *Screenshots show the running app with real system data.*
 
-[Explore all five views in both themes](docs/screenshots/README.md).
+[Explore all six views in both themes](docs/screenshots/README.md).
+
+## A closer look at graphics
+
+Track graphics and compute activity in the GPU view. Choose a device for its utilization history and memory details, then sort processes by GPU usage or observed GPU time. The inspector puts GPU, CPU and memory figures together. Export a GPU snapshot with device details and history from the More menu.
+
+| Light | Dark |
+| :---: | :---: |
+| ![GPU monitoring in light appearance](docs/screenshots/gpu/gpu-light.jpg) | ![GPU monitoring in dark appearance](docs/screenshots/gpu/gpu-dark.jpg) |
+
+GPU availability depends on your Mac and its driver. Process counters cover all reporting devices; observed GPU time begins when monitoring starts. Device utilization and process GPU rates measure different things, so process percentages need not add up to the chart.
 
 ## Smoother everyday monitoring
 
@@ -66,7 +77,7 @@ To uninstall, quit the app and move it from Applications to the Trash. See [inst
 
 | Shortcut | Action |
 | :--- | :--- |
-| **⌘1–⌘5** | Switch views |
+| **⌘1–⌘6** | Switch views |
 | **⌘K** | Search processes |
 | **Space** | Pause or resume |
 | **↑ / ↓** | Select a process when the list is focused |
@@ -79,7 +90,7 @@ The toolbar export button saves the current filtered and sorted list.
 
 No accounts, telemetry or uploads. Reports and exports are saved to a location you choose. No administrator helper is installed.
 
-macOS restricts some process information; unavailable values appear as **—**. The Energy view shows **CPU workload**, not Apple’s proprietary Energy Impact score. GPU usage and per-process packet counts are unavailable. Disk totals cover readable processes; network totals can differ from individual process counters. Histories begin at launch and stay in memory for up to fifteen minutes.
+macOS restricts some process information; unavailable values appear as **—**. The Energy view shows **CPU workload**, not Apple’s proprietary Energy Impact score. GPU counters appear where the graphics driver exposes them; per-process packet counts remain unavailable. Disk totals cover readable processes; network totals can differ from individual process counters. Histories begin at launch and stay in memory for up to fifteen minutes.
 
 [Measurement details](docs/METRICS.md) · [Report an issue](https://github.com/wieslawsoltes/ActivityMonitor/issues) · [Development guide](DEVELOPMENT.md)
 

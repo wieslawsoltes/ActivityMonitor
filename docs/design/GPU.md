@@ -38,3 +38,7 @@ Use public IOKit registry-reading and Metal device-enumeration APIs. Registry pr
 ## Initial evidence (before implementation)
 
 September 9, 2026, M3 Pro: `IOAccelerator` exposes `PerformanceStatistics` with `Device Utilization %`, `Renderer Utilization %`, `Tiler Utilization %`, `In use system memory`, and `Alloc system memory`. Its child `AGXDeviceUserClient` nodes expose `IOUserClientCreator` and `AppUsage[].accumulatedGPUTime`. Several live Metal clients have nonzero cumulative counters. The implementation will validate units and behavior using a controlled Metal workload before treating these as verified process rates.
+
+## Design study and implementation evidence
+
+[Open the light/dark layout study](gpu-preview.html). The [light study capture](gpu-study-light.jpg) uses illustrative values. The implemented view uses live data; see [counter validation](../GPU_VALIDATION.md) and [product screenshots](../screenshots/README.md#gpu-preview).
