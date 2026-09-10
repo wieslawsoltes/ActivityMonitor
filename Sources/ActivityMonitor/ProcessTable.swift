@@ -685,47 +685,9 @@ private struct ProcessTableRow: View, Equatable {
   }
   private var metricCells: some View {
     Canvas { context, size in
-      var x: CGFloat = 0
-      for key in layout.order {
-        let cellWidth = layout.width(key)
-        guard let column = columns.first(where: { $0.id == key }) else {
-          x += cellWidth
-          continue
-        }
-        let primary = column.id == "primary" || metric == .network && column.id == "received"
-        let highlighted =
-          column.id == "primary" && (metric == .cpu || metric == .memory || metric == .gpu)
-        let color = highlighted ? theme.blue : primary ? theme.text : theme.secondary
-        let cellText = ProcessCellText.truncate(
-          text(row, column.id), width: cellWidth - (highlighted ? 34 : 20),
-          font: .monospacedDigitSystemFont(
-            ofSize: column.id == "user" ? 11 : 12, weight: primary ? .medium : .regular))
-        let label = Text(cellText)
-          .font(
-            .system(size: column.id == "user" ? 11 : 12, weight: primary ? .medium : .regular)
-              .monospacedDigit()
-          )
-          .foregroundColor(color)
-        let resolved = context.resolve(label)
-        let textSize = resolved.measure(
-          in: CGSize(width: CGFloat.greatestFiniteMagnitude, height: 41))
-        var cellContext = context
-        cellContext.clip(
-          to: Path(CGRect(x: x + 10, y: 0, width: max(0, cellWidth - 20), height: 41)))
-        if highlighted {
-          let pillWidth = min(cellWidth - 20, textSize.width + 14)
-          cellContext.fill(
-            Path(
-              roundedRect: CGRect(
-                x: x + cellWidth - 10 - pillWidth, y: 8.5, width: pillWidth, height: 24),
-              cornerRadius: 3), with: .color(theme.blue.opacity(0.095)))
-        }
-        let leading = column.id == "user"
-        cellContext.draw(
-          resolved,
-          at: CGPoint(x: leading ? x + 10 : x + cellWidth - (highlighted ? 17 : 10), y: 20.5),
-          anchor: leading ? .leading : .trailing)
-        x += cellWidth
+      context.withCGContext { cg in
+        ProcessMetricDrawing.draw(
+          row: row, columns: columns, layout: layout, metric: metric, theme: theme, in: cg)
       }
     }.accessibilityHidden(true)
   }
