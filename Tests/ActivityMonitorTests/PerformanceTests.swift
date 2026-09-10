@@ -1,4 +1,5 @@
 import AppKit
+import Darwin
 import SwiftUI
 import XCTest
 
@@ -47,6 +48,14 @@ enum PerformanceFixture {
     value.system.pressure = 1
     value.lastUpdate = end
     for metric in Metric.allCases { value.histories[metric] = points(memory: metric == .memory) }
+    value.gpuDevices = [
+      GPUDeviceSample(
+        id: 1, name: "Fixture GPU", unifiedMemory: true,
+        utilization: 42, renderer: 30, tiler: 15, memoryUsed: 512 * 1024 * 1024,
+        memoryAllocated: 1024 * 1024 * 1024)
+    ]
+    value.selectedGPU = 1
+    value.gpuHistories[1] = points().map { GPUHistoryPoint(date: $0.date, utilization: $0.a) }
     return value
   }
 }
@@ -63,13 +72,16 @@ final class PerformanceTests: XCTestCase {
     }
     let iterations =
       Int(ProcessInfo.processInfo.environment["AM_PERFORMANCE_ITERATIONS"] ?? "") ?? iterations
-    try work()  // Warm framework/font caches; cold startup is measured separately.
+    try work()  // Warm framework/font caches; this is not whole-process cold launch latency.
     var milliseconds: [Double] = []
     for _ in 0..<iterations {
       let start = ProcessInfo.processInfo.systemUptime
       try autoreleasepool { try work() }
       milliseconds.append((ProcessInfo.processInfo.systemUptime - start) * 1000)
     }
+    report(name, milliseconds: milliseconds)
+  }
+  private func report(_ name: String, milliseconds: [Double]) {
     let sorted = milliseconds.sorted()
     let result: [String: Any] = [
       "name": name, "median_ms": sorted[sorted.count / 2],
@@ -101,11 +113,13 @@ final class PerformanceTests: XCTestCase {
   @MainActor func testHeadlessRenderBenchmarks() throws {
     try enabled()
     let monitor = PerformanceFixture.monitor()
-    for metric in [Metric.cpu, .memory, .network] {
+    for metric in Metric.allCases {
       benchmark("chart.\(metric.rawValue).15min", iterations: 3) {
         let view = TelemetryChart(
-          samples: TelemetryData.samples(
-            points: monitor.histories[metric]!, metric: metric, maximumGap: 10),
+          samples: metric == .gpu
+            ? TelemetryData.gpu(monitor.gpuHistories[1]!, maximumGap: 10)
+            : TelemetryData.samples(
+              points: monitor.histories[metric]!, metric: metric, maximumGap: 10),
           metric: metric, range: 15, end: PerformanceFixture.end, theme: .init(dark: false))
         render(view, size: CGSize(width: 720, height: 160))
       }
@@ -122,6 +136,119 @@ final class PerformanceTests: XCTestCase {
         )
         .environmentObject(monitor), size: CGSize(width: 1080, height: 760))
     }
+  }
+  @MainActor func testStartupAndSupplementarySurfaces() throws {
+    try enabled()
+    benchmark("startup.models") {
+      let monitor = Monitor(startAutomatically: false)
+      let tray = MonitorMenuBarController(monitor: monitor, navigation: MonitorNavigation())
+      #if !PERFORMANCE_BASELINE
+        XCTAssertFalse(tray.hasPopoverContent)
+      #else
+        _ = tray
+      #endif
+    }
+    let monitor = PerformanceFixture.monitor()
+    benchmark("inspector", iterations: 3) {
+      render(
+        MonitorInspector(
+          process: monitor.rows.first, theme: .init(dark: false), busy: false,
+          close: {}, sample: { _ in }, files: { _ in }, reveal: { _ in }, stop: { _ in }),
+        size: CGSize(width: 340, height: 600))
+    }
+    benchmark("popover", iterations: 3) {
+      #if PERFORMANCE_BASELINE
+        let popover = MenuBarMonitor(openMonitor: {}, closePopover: {})
+      #else
+        let popover = MenuBarMonitor(
+          openMonitor: {}, closePopover: {}, presentation: MenuBarPresentation())
+      #endif
+      render(
+        popover.environmentObject(monitor).environmentObject(MonitorNavigation()),
+        size: CGSize(width: 420, height: 690))
+    }
+  }
+
+  @MainActor func testScrollingAndRefreshBenchmarks() async throws {
+    try enabled()
+    let suite = "ActivityMonitor.Performance.\(UUID())"
+    let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+    defer { defaults.removePersistentDomain(forName: suite) }
+    let rows = PerformanceFixture.rows(1000)
+    let store = HeadlessProcessStore(rows)
+    let host = NSHostingView(
+      rootView: UpdatingProcessTableHarness(store: store).defaultAppStorage(defaults))
+    let window = NSWindow(
+      contentRect: CGRect(x: 0, y: 0, width: 1000, height: 600),
+      styleMask: [.borderless], backing: .buffered, defer: false)
+    window.isReleasedWhenClosed = false
+    window.contentView = host
+    defer {
+      window.contentView = nil
+      window.close()
+    }
+    func drain() async {
+      await withCheckedContinuation { continuation in
+        DispatchQueue.main.async {
+          autoreleasepool { host.layoutSubtreeIfNeeded() }
+          continuation.resume()
+        }
+      }
+    }
+    host.layoutSubtreeIfNeeded()
+    await drain()
+    await drain()
+    func find(_ view: NSView) -> ProcessTableViewport.Anchor? {
+      if let anchor = view as? ProcessTableViewport.Anchor { return anchor }
+      return view.subviews.lazy.compactMap { find($0) }.first
+    }
+    let anchor = try XCTUnwrap(find(host))
+    let scroll = try XCTUnwrap(anchor.enclosingScrollView)
+    let document = try XCTUnwrap(scroll.documentView)
+    XCTAssertGreaterThan(document.bounds.height, 40_000)
+    var scrollTimes: [Double] = []
+    var refreshTimes: [Double] = []
+    var initialFootprint: UInt64 = 0
+    func footprint() -> UInt64 {
+      var value = rusage_info_v4()
+      let status = withUnsafeMutablePointer(to: &value) { pointer in
+        pointer.withMemoryRebound(to: rusage_info_t?.self, capacity: 1) {
+          proc_pid_rusage(getpid(), RUSAGE_INFO_V4, $0)
+        }
+      }
+      XCTAssertEqual(status, 0)
+      return value.ri_phys_footprint
+    }
+    for iteration in 0..<120 {
+      let position = CGFloat(iteration % 40) * 41
+      var start = ProcessInfo.processInfo.systemUptime
+      scroll.contentView.scroll(to: CGPoint(x: 0, y: position))
+      scroll.reflectScrolledClipView(scroll.contentView)
+      await drain()
+      await drain()
+      if iteration >= 40 {
+        scrollTimes.append((ProcessInfo.processInfo.systemUptime - start) * 1000)
+      }
+      var updated = rows
+      for index in updated.indices { updated[index].cpu += Double(iteration) }
+      start = ProcessInfo.processInfo.systemUptime
+      store.rows = updated
+      await drain()
+      await drain()
+      if iteration >= 40 {
+        refreshTimes.append((ProcessInfo.processInfo.systemUptime - start) * 1000)
+      }
+      if iteration == 39 { initialFootprint = footprint() }
+    }
+    let endFootprint = footprint()
+    let growth = endFootprint > initialFootprint ? endFootprint - initialFootprint : 0
+    print(
+      "MEMORY {\"name\":\"table.scroll_refresh.1000\",\"growth_bytes\":\(growth),\"start_bytes\":\(initialFootprint),\"end_bytes\":\(endFootprint)}"
+    )
+    XCTAssertLessThan(
+      growth, 64 * 1024 * 1024, "Memory must plateau while scrolling and updating reused rows")
+    report("table.scroll.layout.1000", milliseconds: scrollTimes)
+    report("table.refresh.layout.1000", milliseconds: refreshTimes)
   }
   @MainActor private var renderIndex = 0
   @MainActor private func render<V: View>(_ view: V, size: CGSize) {

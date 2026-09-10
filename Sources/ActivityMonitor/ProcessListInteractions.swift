@@ -2,9 +2,12 @@ import AppKit
 import SwiftUI
 
 struct ProcessColumnOrder {
+  private static let decoded = BoundedCache<String, [String: [String]]>(capacity: 16)
   var values: [String: [String]]
   init(_ json: String = "{}") {
-    values = (try? JSONDecoder().decode([String: [String]].self, from: Data(json.utf8))) ?? [:]
+    values = Self.decoded.value(for: json) {
+      (try? JSONDecoder().decode([String: [String]].self, from: Data(json.utf8))) ?? [:]
+    }
   }
   var json: String { (try? String(data: JSONEncoder().encode(values), encoding: .utf8)) ?? "{}" }
   func ordered(_ keys: [String], metric: Metric) -> [String] {

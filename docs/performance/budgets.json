@@ -1,0 +1,58 @@
+{
+  "architecture_factor": {
+    "arm64": 1,
+    "x86_64": 2
+  },
+  "benchmarks": {
+    "chart.CPU.15min": {
+      "median_ms": 25
+    },
+    "chart.Memory.15min": {
+      "median_ms": 25
+    },
+    "chart.Network.15min": {
+      "median_ms": 25
+    },
+    "query.all_views.1000": {
+      "median_ms": 5
+    },
+    "format.all_columns.1000": {
+      "median_ms": 75
+    },
+    "workspace.1000": {
+      "median_ms": 800
+    },
+    "gallery.1000": {
+      "median_ms": 350
+    },
+    "startup.models": {
+      "median_ms": 20
+    },
+    "inspector": {
+      "median_ms": 150
+    },
+    "popover": {
+      "median_ms": 350
+    },
+    "table.scroll.layout.1000": {
+      "median_ms": 20,
+      "p95_ms": 50
+    },
+    "table.refresh.layout.1000": {
+      "median_ms": 30,
+      "p95_ms": 50
+    },
+    "chart.Energy.15min": {
+      "median_ms": 25
+    },
+    "chart.Disk.15min": {
+      "median_ms": 25
+    },
+    "chart.GPU.15min": {
+      "median_ms": 25
+    }
+  },
+  "memory_growth_bytes": {
+    "table.scroll_refresh.1000": 67108864
+  }
+}

@@ -5,6 +5,45 @@ import XCTest
 @testable import ActivityMonitor
 
 final class PerformanceCorrectnessTests: XCTestCase {
+  @MainActor func testFirstLiveSnapshotHasProcessesWithinStartupBudget() async {
+    let start = ProcessInfo.processInfo.systemUptime
+    let monitor = Monitor(startAutomatically: false)
+    await monitor.refresh()
+    XCTAssertNotNil(monitor.lastUpdate)
+    XCTAssertFalse(monitor.rows.isEmpty)
+    XCTAssertGreaterThan(monitor.system.physical, 0)
+    XCTAssertLessThan(
+      ProcessInfo.processInfo.systemUptime - start, 2,
+      "First telemetry must not wait for slow external collectors")
+  }
+  @MainActor func testCachedIconsRetainOnlyOneRetinaSizedRepresentation() {
+    let source = NSImage(size: NSSize(width: 1024, height: 1024), flipped: false) { rect in
+      NSColor.systemBlue.setFill()
+      rect.fill()
+      return true
+    }
+    let result = ProcessIconCache.thumbnail(source)
+    XCTAssertEqual(result.representations.count, 1)
+    XCTAssertEqual(result.representations.first?.pixelsWide, 128)
+    XCTAssertEqual(result.representations.first?.pixelsHigh, 128)
+    XCTAssertEqual(result.size.width, 64)
+    let bitmap = result.representations.first as? NSBitmapImageRep
+    XCTAssertGreaterThan(bitmap?.colorAt(x: 64, y: 64)?.alphaComponent ?? 0, 0.9)
+  }
+  func testRenderingCachesAreBoundedAndDoNotShareMutablePreferences() {
+    let cache = BoundedCache<Int, String>(capacity: 32)
+    DispatchQueue.concurrentPerform(iterations: 2000) { index in
+      XCTAssertEqual(cache.value(for: index) { String(index) }, String(index))
+    }
+    XCTAssertLessThanOrEqual(cache.count, 32)
+    var first = ProcessColumnWidths()
+    first.set("name", metric: .cpu, width: 600)
+    XCTAssertNil(ProcessColumnWidths().width("name", metric: .cpu))
+    let json = first.json
+    var second = ProcessColumnWidths(json)
+    second.set("name", metric: .cpu, width: 900)
+    XCTAssertEqual(ProcessColumnWidths(json).width("name", metric: .cpu), 600)
+  }
   func testLimitedQueriesMatchFullSortingForEveryColumnFilterAndDirection() {
     let rows = PerformanceFixture.rows(1000).reversed()
     for metric in Metric.allCases {
@@ -76,7 +115,7 @@ final class PerformanceCorrectnessTests: XCTestCase {
           let range = ProcessVisibleRows.range(count: count, viewport: rect)
           XCTAssertGreaterThanOrEqual(range.lowerBound, 0)
           XCTAssertLessThanOrEqual(range.upperBound, count)
-          XCTAssertLessThanOrEqual(range.count, Int(ceil(height / 41)) + 17)
+          XCTAssertLessThanOrEqual(range.count, Int(ceil(height / 41)) + 5)
           if count > 0 {
             XCTAssertLessThanOrEqual(CGFloat(range.lowerBound) * 41 + 37, max(37, y))
             XCTAssertGreaterThanOrEqual(

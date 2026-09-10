@@ -32,7 +32,6 @@ struct MonitorProcessTable: View {
   @State private var draftWidths: [String: CGFloat] = [:]
   @State private var viewportWidth: CGFloat?
   @State private var horizontalOffset: CGFloat = 0
-  @State private var rowViewport = CGRect(x: 0, y: 0, width: 1200, height: 900)
   @AppStorage("processColumnOrder.v1") private var columnOrder = "{}"
   @State private var selectionAnchor: Int32?
   @State private var selectedStarts: [Int32: UInt64] = [:]
@@ -79,7 +78,6 @@ struct MonitorProcessTable: View {
     GeometryReader { g in
       let visibleColumns = columns
       let visibleEntries = entries
-      let rowRange = ProcessVisibleRows.range(count: visibleEntries.count, viewport: rowViewport)
       let chosenRows = selectedRows
       let canStopChosen = canStop
       let toolbarHeight: CGFloat = g.size.width >= 900 ? 61 : 76
@@ -98,43 +96,28 @@ struct MonitorProcessTable: View {
           viewport: viewportWidth ?? fallback, metric: metric, columns: visibleColumns,
           saved: widthPreferences, order: orderPreferences)
         ScrollView([.horizontal, .vertical]) {
-          VStack(spacing: 0) {
-            Color.clear.frame(height: 37 + CGFloat(rowRange.lowerBound) * 41)
-            ForEach(Array(visibleEntries[rowRange].enumerated()), id: \.element.id) {
-              offset, entry in
-              let index = rowRange.lowerBound + offset
-              let row = entry.row
-              ProcessTableRow(
-                row: row, index: index, layout: layout, metric: metric, theme: theme,
-                columns: visibleColumns, selectedSet: selectedIDs, hierarchical: hierarchy,
-                depth: entry.depth, hasChildren: entry.hasChildren,
-                expanded: !collapsed.contains(row.id), toggleExpanded: { toggleExpanded(row.id) },
-                isSelected: selectedIDs.contains(row.id),
-                select: {
-                  selectRow(row.id)
-                }, inspect: inspect, stop: stop,
-                copy: { copyRows(selectedIDs.contains(row.id) ? chosenRows : [row]) },
-                stopSelection: { stopMany(selectedIDs.contains(row.id) ? chosenRows : [row]) },
-                canStopSelection: selectedIDs.contains(row.id)
-                  ? canStopChosen : row.uid == getuid() && row.id > 1 && row.id != getpid()
-              ).equatable().id(row.id)
-            }
-            Color.clear.frame(height: CGFloat(visibleEntries.count - rowRange.upperBound) * 41)
-            if rows.isEmpty { ContentUnavailableView.search(text: query).frame(height: 240) }
+          ProcessViewportRows(
+            entries: visibleEntries,
+            height: max(1, g.size.height - toolbarHeight - 1),
+            widthChanged: { viewportWidth = $0 },
+            horizontalChanged: { horizontalOffset = $0 }
+          ) { index, entry in
+            let row = entry.row
+            ProcessTableRow(
+              row: row, index: index, layout: layout, metric: metric, theme: theme,
+              columns: visibleColumns, selectedSet: selectedIDs, hierarchical: hierarchy,
+              depth: entry.depth, hasChildren: entry.hasChildren,
+              expanded: !collapsed.contains(row.id), toggleExpanded: { toggleExpanded(row.id) },
+              isSelected: selectedIDs.contains(row.id),
+              select: {
+                selectRow(row.id)
+              }, inspect: inspect, stop: stop,
+              copy: { copyRows(selectedIDs.contains(row.id) ? chosenRows : [row]) },
+              stopSelection: { stopMany(selectedIDs.contains(row.id) ? chosenRows : [row]) },
+              canStopSelection: selectedIDs.contains(row.id)
+                ? canStopChosen : row.uid == getuid() && row.id > 1 && row.id != getpid()
+            ).equatable().id(row.id)
           }.frame(width: layout.total)
-            .background(
-              ProcessTableViewport(
-                changed: { viewportWidth = $0 },
-                visibleChanged: { rect in
-                  if abs(horizontalOffset - rect.minX) > 0.1 { horizontalOffset = rect.minX }
-                  // Quantize notifications to rows, avoiding view invalidation per scrolling pixel.
-                  if ProcessVisibleRows.range(count: visibleEntries.count, viewport: rect)
-                    != rowRange
-                  {
-                    rowViewport = rect
-                  }
-                })
-            )
             .background(
               ProcessTableSelectionScroll(
                 selectedID: selection, rowIndex: visibleEntries.firstIndex { $0.id == selection }))
@@ -147,6 +130,9 @@ struct MonitorProcessTable: View {
               .offset(x: -horizontalOffset)
               .frame(width: viewportWidth ?? fallback, height: 37, alignment: .leading)
               .clipped()
+          }
+          .overlay {
+            if rows.isEmpty { ContentUnavailableView.search(text: query).padding(.top, 37) }
           }
           .scrollIndicators(.automatic)
           .focusable().focusEffectDisabled().focused($focused)

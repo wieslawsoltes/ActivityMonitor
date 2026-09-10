@@ -1,5 +1,7 @@
 # Performance measurements
 
+Current validation: [performance gates and reproduction](OPTIMIZATION.md). The measurements below are retained historical evidence for version 1.1.
+
 The final 1.1 candidate used **32% less CPU during automated navigation** than v1.0.0 in the same-day repeat comparison. Idle CPU was **16–19% lower**. These are observations on one busy desktop, not a CPU ceiling or a guarantee for other Macs.
 
 ## Final comparison

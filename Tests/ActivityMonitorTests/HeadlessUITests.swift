@@ -25,6 +25,15 @@ struct ProcessTableHarness: View {
   }
 }
 
+@MainActor final class HeadlessProcessStore: ObservableObject {
+  @Published var rows: [ProcessRow]
+  init(_ rows: [ProcessRow]) { self.rows = rows }
+}
+struct UpdatingProcessTableHarness: View {
+  @ObservedObject var store: HeadlessProcessStore
+  var body: some View { ProcessTableHarness(rows: store.rows) }
+}
+
 @MainActor final class HeadlessUITests: XCTestCase {
   private func descendant<T: NSView>(_ root: NSView, _: T.Type) -> T? {
     if let view = root as? T { return view }
@@ -45,8 +54,9 @@ struct ProcessTableHarness: View {
     let scale = CGFloat(image.pixelsWide) / width
     // Inside the first fully visible row, away from the toolbar, header and icons.
     var ink = 0
-    for y in stride(from: 110, to: 133, by: 2) {
-      for x in stride(from: 55, to: 280, by: 3) {
+    let top = width >= 900 ? 110 : 125
+    for y in stride(from: top, to: top + 23, by: 2) {
+      for x in stride(from: 55, to: min(280, Int(width * 0.32)), by: 3) {
         guard
           let color = image.colorAt(x: Int(CGFloat(x) * scale), y: Int(CGFloat(y) * scale))?
             .usingColorSpace(.sRGB)
@@ -63,38 +73,40 @@ struct ProcessTableHarness: View {
     defer { defaults.removePersistentDomain(forName: suite) }
     for metric in Metric.allCases {
       for dark in [false, true] {
-        let host = NSHostingView(
-          rootView: ProcessTableHarness(
-            rows: PerformanceFixture.rows(1000), metric: metric, dark: dark
-          )
-          .defaultAppStorage(defaults))
-        host.frame = CGRect(x: 0, y: 0, width: 1000, height: 600)
-        // Attach to an unordered window so AppKit initializes its real clip geometry.
-        // This window is never shown or made key and cannot interact with user windows.
-        let window = NSWindow(
-          contentRect: host.frame, styleMask: [.borderless], backing: .buffered, defer: false)
-        window.isReleasedWhenClosed = false
-        window.contentView = host
-        defer { window.close() }
-        try await settle(host)
-        _ = try bitmap(host)
-        try await settle(host)
-        let anchor = try XCTUnwrap(descendant(host, ProcessTableViewport.Anchor.self))
-        let scroll = try XCTUnwrap(anchor.enclosingScrollView)
-        let document = try XCTUnwrap(scroll.documentView)
-        let height = document.bounds.height
-        XCTAssertEqual(height, 41_037, accuracy: 2)
-        for fraction in [0.0, 0.5, 1.0, 0.0] {
-          let y = max(0, height - scroll.contentView.bounds.height) * fraction
-          scroll.contentView.scroll(to: CGPoint(x: 0, y: y))
-          scroll.reflectScrolledClipView(scroll.contentView)
+        for width: CGFloat in [420, 1000] {
+          let host = NSHostingView(
+            rootView: ProcessTableHarness(
+              rows: PerformanceFixture.rows(1000), metric: metric, dark: dark
+            )
+            .defaultAppStorage(defaults))
+          host.frame = CGRect(x: 0, y: 0, width: width, height: 600)
+          // Attach to an unordered window so AppKit initializes its real clip geometry.
+          // This window is never shown or made key and cannot interact with user windows.
+          let window = NSWindow(
+            contentRect: host.frame, styleMask: [.borderless], backing: .buffered, defer: false)
+          window.isReleasedWhenClosed = false
+          window.contentView = host
+          defer { window.close() }
           try await settle(host)
-          let image = try bitmap(host)
-          XCTAssertTrue(
-            rowHasInk(image, width: 1000, dark: dark),
-            "Blank \(metric) \(dark) viewport at \(fraction)")
-          XCTAssertEqual(document.bounds.height, height, accuracy: 2)
-          XCTAssertEqual(scroll.contentView.bounds.minY, y, accuracy: 2)
+          _ = try bitmap(host)
+          try await settle(host)
+          let anchor = try XCTUnwrap(descendant(host, ProcessTableViewport.Anchor.self))
+          let scroll = try XCTUnwrap(anchor.enclosingScrollView)
+          let document = try XCTUnwrap(scroll.documentView)
+          let height = document.bounds.height
+          XCTAssertEqual(height, 41_037, accuracy: 2)
+          for fraction in [0.0, 0.5, 1.0, 0.0] {
+            let y = max(0, height - scroll.contentView.bounds.height) * fraction
+            scroll.contentView.scroll(to: CGPoint(x: 0, y: y))
+            scroll.reflectScrolledClipView(scroll.contentView)
+            try await settle(host)
+            let image = try bitmap(host)
+            XCTAssertTrue(
+              rowHasInk(image, width: width, dark: dark),
+              "Blank \(metric) \(dark) viewport at \(fraction)")
+            XCTAssertEqual(document.bounds.height, height, accuracy: 2)
+            XCTAssertEqual(scroll.contentView.bounds.minY, y, accuracy: 2)
+          }
         }
       }
     }
