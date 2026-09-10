@@ -105,6 +105,16 @@ struct ContentView: View {
         }
       }
       .animation(reduceMotion ? nil : .easeInOut(duration: 0.18), value: inspector)
+      .sheet(isPresented: $showGallery) {
+        DesignGallery(
+          availableSize: geometry.size,
+          select: { view, style in
+            selectMetric(view)
+            appearance = style
+            showGallery = false
+          }, close: { showGallery = false }
+        ).environmentObject(monitor)
+      }
     }.background(theme.window).foregroundStyle(theme.text).font(.system(size: 12))
       .frame(minWidth: 420, minHeight: 480).ignoresSafeArea(.container, edges: .top)
       .onReceive(navigation.$request) { request in
@@ -148,15 +158,6 @@ struct ContentView: View {
         Button("OK") { monitor.error = nil }
       } message: {
         Text(monitor.error ?? "")
-      }
-      .sheet(isPresented: $showGallery) {
-        DesignGallery(
-          select: { view, style in
-            selectMetric(view)
-            appearance = style
-            showGallery = false
-          }, close: { showGallery = false }
-        ).environmentObject(monitor)
       }
       .sheet(isPresented: $showHelp) {
         VStack(alignment: .leading, spacing: 18) {

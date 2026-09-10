@@ -15,6 +15,7 @@ struct GalleryLayout {
 
 struct DesignGallery: View {
   @EnvironmentObject var monitor: Monitor
+  let availableSize: CGSize
   let select: (Metric, String) -> Void
   let close: () -> Void
   @State private var previewRows: [ProcessRow] = []
@@ -46,8 +47,8 @@ struct DesignGallery: View {
         }
       }
     }.frame(
-      width: min(1080, max(390, (NSApp.mainWindow?.frame.width ?? 1130) - 30)),
-      height: min(760, max(430, (NSApp.mainWindow?.frame.height ?? 800) - 30))
+      width: min(1080, max(390, availableSize.width - 30)),
+      height: min(760, max(430, availableSize.height - 30))
     )
     .onReceive(monitor.$rows) { rows in
       gpuRows = Array(
@@ -131,6 +132,7 @@ struct DesignGallery: View {
         RoundedRectangle(cornerRadius: 12).stroke(theme.border, lineWidth: 1))
     }.buttonStyle(.plain).frame(width: width, alignment: .topLeading)
       .accessibilityElement(children: .ignore)
+      .accessibilityAddTraits(.isButton)
       .accessibilityLabel("\(metric.rawValue), \(dark ? "Dark" : "Light") appearance")
       .accessibilityHint("Open this view in the monitor")
   }

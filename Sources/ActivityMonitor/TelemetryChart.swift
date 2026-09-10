@@ -179,6 +179,7 @@ struct TelemetryChart: View {
       return .handled
     }
     .onKeyPress(.escape) {
+      guard selectedDate != nil else { return .ignored }
       selectedDate = nil
       return .handled
     }
