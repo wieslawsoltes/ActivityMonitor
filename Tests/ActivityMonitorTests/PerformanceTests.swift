@@ -58,6 +58,11 @@ final class PerformanceTests: XCTestCase {
       "Run scripts/performance.sh for release-mode performance gates")
   }
   private func benchmark(_ name: String, iterations: Int = 7, _ work: () throws -> Void) rethrows {
+    if let selected = ProcessInfo.processInfo.environment["AM_PERFORMANCE_CASE"], selected != name {
+      return
+    }
+    let iterations =
+      Int(ProcessInfo.processInfo.environment["AM_PERFORMANCE_ITERATIONS"] ?? "") ?? iterations
     try work()  // Warm framework/font caches; cold startup is measured separately.
     var milliseconds: [Double] = []
     for _ in 0..<iterations {
@@ -118,6 +123,7 @@ final class PerformanceTests: XCTestCase {
         .environmentObject(monitor), size: CGSize(width: 1080, height: 760))
     }
   }
+  @MainActor private var renderIndex = 0
   @MainActor private func render<V: View>(_ view: V, size: CGSize) {
     let host = NSHostingView(rootView: view)
     host.frame = CGRect(origin: .zero, size: size)
@@ -128,5 +134,11 @@ final class PerformanceTests: XCTestCase {
     }
     host.cacheDisplay(in: host.bounds, to: bitmap)
     XCTAssertGreaterThan(bitmap.pixelsWide, 0)
+    if let directory = ProcessInfo.processInfo.environment["AM_RENDER_DIR"] {
+      try? FileManager.default.createDirectory(atPath: directory, withIntermediateDirectories: true)
+      try? bitmap.representation(using: .png, properties: [:])?.write(
+        to: URL(fileURLWithPath: directory).appendingPathComponent("render-\(renderIndex).png"))
+      renderIndex += 1
+    }
   }
 }

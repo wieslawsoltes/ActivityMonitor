@@ -49,3 +49,15 @@ struct ProcessTableSelectionScroll: NSViewRepresentable {
     }
   }
 }
+
+/// Bound SwiftUI row construction even when a two-axis scroll view proposes an
+/// unbounded height. Absolute row indices preserve striping, selection and reveal.
+enum ProcessVisibleRows {
+  static func range(count: Int, viewport: CGRect, overscan: Int = 8) -> Range<Int> {
+    guard count > 0 else { return 0..<0 }
+    let first = max(0, Int(floor(max(0, viewport.minY - 37) / 41)) - overscan)
+    let last = Int(ceil(max(0, viewport.maxY - 37) / 41)) + overscan
+    let lower = min(count, first)
+    return lower..<min(count, max(lower, last))
+  }
+}

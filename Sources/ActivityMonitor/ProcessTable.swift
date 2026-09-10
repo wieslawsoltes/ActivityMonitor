@@ -31,6 +31,8 @@ struct MonitorProcessTable: View {
   @AppStorage("processColumnWidths.v1") private var columnWidths = "{}"
   @State private var draftWidths: [String: CGFloat] = [:]
   @State private var viewportWidth: CGFloat?
+  @State private var horizontalOffset: CGFloat = 0
+  @State private var rowViewport = CGRect(x: 0, y: 0, width: 1200, height: 900)
   @AppStorage("processColumnOrder.v1") private var columnOrder = "{}"
   @State private var selectionAnchor: Int32?
   @State private var selectedStarts: [Int32: UInt64] = [:]
@@ -54,24 +56,30 @@ struct MonitorProcessTable: View {
   }
   var preferences: ProcessColumnPreferences { ProcessColumnPreferences(columnVisibility) }
   var allColumns: [ProcessColumn] {
-    ProcessColumns.available(metric).filter {
-      preferences.isVisible(
+    let saved = preferences
+    return ProcessColumns.available(metric).filter {
+      saved.isVisible(
         $0.id, metric: metric, showTime: showTime,
         showThreads: showThreads, showUser: showUser)
     }
   }
   var columns: [ProcessColumn] {
-    guard !allColumnsVisible else { return allColumns }
+    let enabled = allColumns
+    let explicit = preferences.explicitlyEnabled(metric)
+    guard !allColumnsVisible else { return enabled }
     let automatic = Set(
       ProcessColumnPolicy.visible(
-        allColumns, metric: metric, width: viewportWidth ?? availableWidth, sort: sort
+        enabled, metric: metric, width: viewportWidth ?? availableWidth, sort: sort
       ).map(\.id))
-    return allColumns.filter {
-      automatic.contains($0.id) || preferences.explicitlyEnabled(metric).contains($0.id)
+    return enabled.filter {
+      automatic.contains($0.id) || explicit.contains($0.id)
     }
   }
   var body: some View {
     GeometryReader { g in
+      let visibleColumns = columns
+      let visibleEntries = entries
+      let rowRange = ProcessVisibleRows.range(count: visibleEntries.count, viewport: rowViewport)
       let chosenRows = selectedRows
       let canStopChosen = canStop
       let toolbarHeight: CGFloat = g.size.width >= 900 ? 61 : 76
@@ -87,41 +95,59 @@ struct MonitorProcessTable: View {
           - (NSScroller.preferredScrollerStyle == .legacy
             ? NSScroller.scrollerWidth(for: .regular, scrollerStyle: .legacy) : 0)
         let layout = ProcessColumnLayout(
-          viewport: viewportWidth ?? fallback, metric: metric, columns: columns,
+          viewport: viewportWidth ?? fallback, metric: metric, columns: visibleColumns,
           saved: widthPreferences, order: orderPreferences)
         ScrollView([.horizontal, .vertical]) {
-          LazyVStack(spacing: 0, pinnedViews: [.sectionHeaders]) {
-            Section {
-              ForEach(Array(entries.enumerated()), id: \.element.id) { index, entry in
-                let row = entry.row
-                ProcessTableRow(
-                  row: row, index: index, layout: layout, metric: metric, theme: theme,
-                  columns: columns, selectedSet: selectedIDs, hierarchical: hierarchy,
-                  depth: entry.depth, hasChildren: entry.hasChildren,
-                  expanded: !collapsed.contains(row.id), toggleExpanded: { toggleExpanded(row.id) },
-                  isSelected: selectedIDs.contains(row.id),
-                  select: {
-                    selectRow(row.id)
-                  }, inspect: inspect, stop: stop,
-                  copy: { copyRows(selectedIDs.contains(row.id) ? chosenRows : [row]) },
-                  stopSelection: { stopMany(selectedIDs.contains(row.id) ? chosenRows : [row]) },
-                  canStopSelection: selectedIDs.contains(row.id)
-                    ? canStopChosen : row.uid == getuid() && row.id > 1 && row.id != getpid()
-                ).equatable().id(row.id)
-              }
-              if rows.isEmpty { ContentUnavailableView.search(text: query).frame(height: 240) }
-            } header: {
-              VStack(spacing: 0) {
-                header(layout).frame(height: 36)
-                Rectangle().fill(theme.separator).frame(height: 1)
-              }.background(theme.subtle)
+          VStack(spacing: 0) {
+            Color.clear.frame(height: 37 + CGFloat(rowRange.lowerBound) * 41)
+            ForEach(Array(visibleEntries[rowRange].enumerated()), id: \.element.id) {
+              offset, entry in
+              let index = rowRange.lowerBound + offset
+              let row = entry.row
+              ProcessTableRow(
+                row: row, index: index, layout: layout, metric: metric, theme: theme,
+                columns: visibleColumns, selectedSet: selectedIDs, hierarchical: hierarchy,
+                depth: entry.depth, hasChildren: entry.hasChildren,
+                expanded: !collapsed.contains(row.id), toggleExpanded: { toggleExpanded(row.id) },
+                isSelected: selectedIDs.contains(row.id),
+                select: {
+                  selectRow(row.id)
+                }, inspect: inspect, stop: stop,
+                copy: { copyRows(selectedIDs.contains(row.id) ? chosenRows : [row]) },
+                stopSelection: { stopMany(selectedIDs.contains(row.id) ? chosenRows : [row]) },
+                canStopSelection: selectedIDs.contains(row.id)
+                  ? canStopChosen : row.uid == getuid() && row.id > 1 && row.id != getpid()
+              ).equatable().id(row.id)
             }
+            Color.clear.frame(height: CGFloat(visibleEntries.count - rowRange.upperBound) * 41)
+            if rows.isEmpty { ContentUnavailableView.search(text: query).frame(height: 240) }
           }.frame(width: layout.total)
-            .background(ProcessTableViewport { viewportWidth = $0 })
+            .background(
+              ProcessTableViewport(
+                changed: { viewportWidth = $0 },
+                visibleChanged: { rect in
+                  if abs(horizontalOffset - rect.minX) > 0.1 { horizontalOffset = rect.minX }
+                  // Quantize notifications to rows, avoiding view invalidation per scrolling pixel.
+                  if ProcessVisibleRows.range(count: visibleEntries.count, viewport: rect)
+                    != rowRange
+                  {
+                    rowViewport = rect
+                  }
+                })
+            )
             .background(
               ProcessTableSelectionScroll(
-                selectedID: selection, rowIndex: displayRows.firstIndex { $0.id == selection }))
+                selectedID: selection, rowIndex: visibleEntries.firstIndex { $0.id == selection }))
         }.defaultScrollAnchor(.topLeading)
+          .overlay(alignment: .topLeading) {
+            VStack(spacing: 0) {
+              header(layout, columns: visibleColumns).frame(height: 36)
+              Rectangle().fill(theme.separator).frame(height: 1)
+            }.background(theme.subtle)
+              .offset(x: -horizontalOffset)
+              .frame(width: viewportWidth ?? fallback, height: 37, alignment: .leading)
+              .clipped()
+          }
           .scrollIndicators(.automatic)
           .focusable().focusEffectDisabled().focused($focused)
           .onKeyPress(.upArrow, phases: .down) { press in
@@ -444,8 +470,7 @@ struct MonitorProcessTable: View {
       columnWidths = value.json
       draftWidths = [:]
     } else {
-      if let name = value.width("name", metric: metric) { draftWidths["name"] = name }
-      draftWidths[key] = value.width(key, metric: metric)
+      draftWidths = (value.values[metric.rawValue] ?? [:]).mapValues { CGFloat($0) }
     }
   }
   func resetColumnWidth(_ key: String) {
@@ -465,7 +490,7 @@ struct MonitorProcessTable: View {
       },
       reset: { resetColumnWidth(key) })
   }
-  func header(_ layout: ProcessColumnLayout) -> some View {
+  func header(_ layout: ProcessColumnLayout, columns: [ProcessColumn]) -> some View {
     HStack(spacing: 0) {
       ForEach(layout.order, id: \.self) { key in
         let title =

@@ -27,7 +27,7 @@ struct DesignGallery: View {
         header(compact: geometry.size.width < 600).padding(GalleryLayout.inset)
         Divider()
         ScrollView {
-          VStack(alignment: .leading, spacing: 24) {
+          LazyVStack(alignment: .leading, spacing: 24) {
             ForEach(Metric.allCases) { metric in
               VStack(alignment: .leading, spacing: 10) {
                 Text(metric.rawValue).font(.system(size: 15, weight: .semibold))
@@ -54,8 +54,11 @@ struct DesignGallery: View {
       gpuRows = Array(
         ProcessQuery(
           metric: .gpu, query: "", filter: "All processes", sort: "primary", descending: true
-        ).apply(rows).prefix(3))
-      previewRows = Array(rows.sorted { $0.cpu > $1.cpu }.prefix(3))
+        ).apply(rows, limit: 3))
+      previewRows = ProcessQuery(
+        metric: .cpu, query: "", filter: "All processes",
+        sort: "primary", descending: true
+      ).apply(rows, limit: 3)
     }
   }
   private var introduction: some View {

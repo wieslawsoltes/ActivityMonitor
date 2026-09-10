@@ -27,12 +27,14 @@ struct TrayLifecycle: View {
 }
 
 /// AppKit owns only the status item and transient popover; content and telemetry remain SwiftUI.
-@MainActor final class MonitorMenuBarController: NSObject {
+@MainActor final class MonitorMenuBarController: NSObject, NSPopoverDelegate {
   let monitor: Monitor
   let navigation: MonitorNavigation
   var openMonitor: () -> Void = {}
   private var item: NSStatusItem?
   private let popover = NSPopover()
+  private let presentation = MenuBarPresentation()
+  var hasPopoverContent: Bool { popover.contentViewController != nil }
   private var subscriptions = Set<AnyCancellable>()
   init(monitor: Monitor, navigation: MonitorNavigation) {
     self.monitor = monitor
@@ -40,16 +42,23 @@ struct TrayLifecycle: View {
     super.init()
     popover.behavior = .transient
     popover.animates = !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
+    popover.delegate = self
+    monitor.$lastUpdate.combineLatest(monitor.$paused)
+      .receive(on: RunLoop.main)
+      .sink { [weak self] _ in self?.updateLabel() }.store(in: &subscriptions)
+  }
+  private func createPopoverContent() {
     popover.contentViewController = NSHostingController(
       rootView:
         MenuBarMonitor(
           openMonitor: { [weak self] in self?.openMonitor() },
-          closePopover: { [weak self] in self?.popover.performClose(nil) }
+          closePopover: { [weak self] in self?.popover.performClose(nil) },
+          presentation: presentation
         )
         .environmentObject(monitor).environmentObject(navigation))
-    monitor.$lastUpdate.combineLatest(monitor.$paused)
-      .receive(on: RunLoop.main)
-      .sink { [weak self] _ in self?.updateLabel() }.store(in: &subscriptions)
+  }
+  func popoverDidClose(_ notification: Notification) {
+    popover.contentViewController = nil
   }
   func setEnabled(_ enabled: Bool) {
     if enabled && item == nil {
@@ -80,6 +89,7 @@ struct TrayLifecycle: View {
     if popover.isShown {
       popover.performClose(nil)
     } else {
+      if !hasPopoverContent { createPopoverContent() }
       popover.animates = !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
       popover.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
       popover.contentViewController?.view.window?.makeKey()

@@ -148,7 +148,15 @@ struct ProcessIcon: View {
 }
 
 @MainActor enum ProcessIconCache {
-  static let images = NSCache<NSString, NSImage>()
+  static let images: NSCache<NSString, NSImage> = {
+    let cache = NSCache<NSString, NSImage>()
+    cache.countLimit = 256
+    return cache
+  }()
+  static func retain(identities: [Int32: UInt64]) {
+    processes = processes.filter { identities[$0.key] == $0.value.start }
+  }
+  static var retainedProcessCount: Int { processes.count }
   private struct Entry {
     let start: UInt64
     let image: NSImage?

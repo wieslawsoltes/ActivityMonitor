@@ -186,8 +186,12 @@ struct ProcessColumnResizeHandle: View {
 /// Read the usable clip width, including the space reserved by legacy scrollbars.
 struct ProcessTableViewport: NSViewRepresentable {
   var changed: (CGFloat) -> Void
+  var visibleChanged: (CGRect) -> Void = { _ in }
   final class Anchor: NSView {
+    override var isFlipped: Bool { true }
     var changed: ((CGFloat) -> Void)?
+    var visibleChanged: ((CGRect) -> Void)?
+    private var lastVisible: CGRect = .zero
     var observer: NSObjectProtocol?
     weak var clip: NSClipView?
     var lastWidth: CGFloat = 0
@@ -209,14 +213,24 @@ struct ProcessTableViewport: NSViewRepresentable {
       report()
     }
     func report() {
-      guard let width = clip?.bounds.width, width > 0, abs(width - lastWidth) > 0.5 else { return }
-      lastWidth = width
-      DispatchQueue.main.async { [weak self] in self?.changed?(width) }
+      guard let clip, let scroll = clip.enclosingScrollView, let document = scroll.documentView
+      else { return }
+      let width = clip.bounds.width
+      if width > 0, abs(width - lastWidth) > 0.5 {
+        lastWidth = width
+        DispatchQueue.main.async { [weak self] in self?.changed?(width) }
+      }
+      let visible = convert(scroll.documentVisibleRect, from: document)
+      if visible != lastVisible {
+        lastVisible = visible
+        DispatchQueue.main.async { [weak self] in self?.visibleChanged?(visible) }
+      }
     }
   }
   func makeNSView(context: Context) -> Anchor { Anchor() }
   func updateNSView(_ view: Anchor, context: Context) {
     view.changed = changed
+    view.visibleChanged = visibleChanged
     DispatchQueue.main.async { [weak view] in view?.connect() }
   }
 }

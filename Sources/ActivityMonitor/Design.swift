@@ -36,9 +36,10 @@ struct DesignCard<Content: View>: View {
   var body: some View {
     content.frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading).padding(
       padding
-    ).background(theme.card, in: RoundedRectangle(cornerRadius: 14)).overlay(
-      RoundedRectangle(cornerRadius: 14).stroke(theme.border, lineWidth: 1)
-    ).shadow(color: .black.opacity(theme.dark ? 0.06 : 0.025), radius: 2, y: 1)
+    ).background {
+      RoundedRectangle(cornerRadius: 14).fill(theme.card)
+        .shadow(color: .black.opacity(theme.dark ? 0.06 : 0.025), radius: 2, y: 1)
+    }.overlay(RoundedRectangle(cornerRadius: 14).stroke(theme.border, lineWidth: 1))
   }
 }
 private enum ControlSurfaceKind { case segment, icon, action, danger }
@@ -69,13 +70,19 @@ private struct ControlSurface: ViewModifier {
   }
   func body(content: Content) -> some View {
     content.foregroundStyle(foreground)
-      .background(background, in: RoundedRectangle(cornerRadius: radius))
+      .background {
+        if kind == .segment && active {
+          RoundedRectangle(cornerRadius: radius).fill(background)
+            .shadow(color: .black.opacity(0.06), radius: 2, y: 1)
+        } else {
+          RoundedRectangle(cornerRadius: radius).fill(background)
+        }
+      }
       .overlay {
         if kind == .action {
           RoundedRectangle(cornerRadius: radius).stroke(theme.border, lineWidth: 1)
         }
       }
-      .shadow(color: .black.opacity(kind == .segment && active ? 0.06 : 0), radius: 2, y: 1)
       .contentShape(Rectangle()).opacity(enabled ? 1 : 0.4)
       .onHover { hovering = enabled && $0 }
       .animation(reduceMotion ? nil : .easeOut(duration: 0.12), value: hovering)

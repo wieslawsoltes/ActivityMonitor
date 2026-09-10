@@ -76,7 +76,17 @@ struct Snapshot {
   var gpuDevices: [GPUDeviceSample] = []
 }
 func bytes(_ value: UInt64) -> String {
-  ByteCountFormatter.string(fromByteCount: Int64(clamping: value), countStyle: .memory)
+  // Formatters are expensive to construct and must not be shared across threads.
+  let key = "ActivityMonitor.byteFormatter"
+  let formatter: ByteCountFormatter
+  if let cached = Thread.current.threadDictionary[key] as? ByteCountFormatter {
+    formatter = cached
+  } else {
+    formatter = ByteCountFormatter()
+    formatter.countStyle = .memory
+    Thread.current.threadDictionary[key] = formatter
+  }
+  return formatter.string(fromByteCount: Int64(clamping: value))
 }
 func duration(_ seconds: Double) -> String {
   let s = Int(max(0, seconds))
@@ -87,8 +97,7 @@ func csvCell(_ value: String) -> String {
 }
 final class Collector: @unchecked Sendable {
   var old: [Int32: AMProcess] = [:]
-  var network: [Int32: (UInt64, ProcessNetworkCounters)] = [:]
-  var networkDate = Date.distantPast
+  private let networkSampler = ProcessNetworkSampler()
   var time = Date()
   private var users: [UInt32: String] = [:]
   private let gpuReader = GPUHardwareReader()
@@ -99,21 +108,13 @@ final class Collector: @unchecked Sendable {
     let elapsed = max(now.timeIntervalSince(time), 0.001)
     var buffer = [AMProcess](repeating: AMProcess(), count: max(256, Int(am_processes(nil, 0))))
     let count = am_processes(&buffer, Int32(buffer.count))
-    if now.timeIntervalSince(networkDate) >= 5 {
-      let counters = readProcessNetwork()
-      network = Dictionary(
-        uniqueKeysWithValues: buffer.prefix(Int(count)).compactMap {
-          p -> (Int32, (UInt64, ProcessNetworkCounters))? in
-          guard let counter = counters[p.pid] else { return nil }
-          return (p.pid, (p.start, counter))
-        })
-      networkDate = now
-    }
+    let identities = Dictionary(
+      uniqueKeysWithValues: buffer.prefix(Int(count)).map { ($0.pid, $0.start) })
+    let network = networkSampler.collect(identities: identities, now: now)
     let gpu = gpuReader.read()
     let gpuProcesses = gpuTracker.update(
       gpu,
-      identities: Dictionary(
-        uniqueKeysWithValues: buffer.prefix(Int(count)).map { ($0.pid, $0.start) }))
+      identities: identities)
     let detailsByPID =
       details ? detailsCollector.collect(Array(buffer.prefix(Int(count))), now: now) : [:]
     var next: [Int32: AMProcess] = [:]
@@ -132,7 +133,7 @@ final class Collector: @unchecked Sendable {
         user = getpwuid(p.uid).map { String(cString: $0.pointee.pw_name) } ?? String(p.uid)
         users[p.uid] = user
       }
-      let networkCounters = network[p.pid].flatMap { $0.0 == p.start ? $0.1 : nil }
+      let networkCounters = network[p.pid]
       var row = ProcessRow(
         id: p.pid, parent: p.ppid, uid: p.uid, start: p.start, name: name, user: user, cpu: cpu,
         cpuTime: Double(p.cpu) / 1e9, memory: p.footprint > 0 ? p.footprint : p.resident,
@@ -177,23 +178,29 @@ final class Collector: @unchecked Sendable {
   @Published var packetSendRate = 0.0
   @Published var error: String?
   private let collector = Collector()
-  private let applications = ApplicationInventory()
+  private lazy var applications = ApplicationInventory()
   private var task: Task<Void, Never>?
   private var previous: AMSystem?
   private var previousDate: Date?
   private var refreshing = false
-  private var diskPrevious: [Int32: ProcessRow] = [:]
+  private struct DiskCounters {
+    let start: UInt64
+    let read: UInt64
+    let written: UInt64
+  }
+  private var diskPrevious: [Int32: DiskCounters] = [:]
   init(startAutomatically: Bool = true) {
     system.battery = -1
     guard startAutomatically else { return }
     task = Task { [weak self] in
       while !Task.isCancelled {
-        guard let self else { return }
-        if !self.paused { await self.refresh() }
-        try? await Task.sleep(for: .seconds(self.interval))
+        guard let interval = self?.interval else { return }
+        if self?.paused == false { await self?.refresh() }
+        try? await Task.sleep(for: .seconds(interval))
       }
     }
   }
+  deinit { task?.cancel() }
   func refresh() async {
     guard !refreshing else { return }
     refreshing = true
@@ -244,6 +251,8 @@ final class Collector: @unchecked Sendable {
         application: applications.processStarts[p.id] == p.start ? applications.names[p.id] : nil)
       return p
     }
+    ProcessIconCache.retain(
+      identities: Dictionary(uniqueKeysWithValues: rows.map { ($0.id, $0.start) }))
     system = snapshot.system
     updateGPU(snapshot.gpuDevices, date: now)
     let used = Double(system.active + system.wired + system.compressed)
@@ -260,7 +269,10 @@ final class Collector: @unchecked Sendable {
     previous = system
     previousDate = now
     lastUpdate = now
-    diskPrevious = Dictionary(uniqueKeysWithValues: rows.map { ($0.id, $0) })
+    diskPrevious = Dictionary(
+      uniqueKeysWithValues: rows.map {
+        ($0.id, DiskCounters(start: $0.start, read: $0.read, written: $0.written))
+      })
   }
   func updateGPU(_ devices: [GPUDeviceSample], date: Date) {
     let connected = Set(devices.map(\.id))
