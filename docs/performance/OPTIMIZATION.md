@@ -11,7 +11,7 @@ python3 -m unittest discover -s Tests/Packaging -v
 ./scripts/performance.sh
 ```
 
-`swift test` includes real offscreen SwiftUI/AppKit rendering in unordered windows. No windows are shown or made key, no input is synthesized, and no user preferences are changed. All six process lists render at standard and compact widths in both themes, at the top, middle and bottom and after returning to the top. The tests check row pixels, scroll position and constant document height, so an empty viewport cannot pass as a fast render. Overview and inspector rendering, column sizing/order/visibility, hierarchy, selection, counter availability and process identity checks remain required.
+`swift test` includes real offscreen SwiftUI/AppKit rendering in unordered windows. No windows are shown or made key, no input is synthesized, and no user preferences are changed. All six process lists render at standard and compact widths in both themes, at the top, middle and bottom and after returning to the top. The tests check row pixels, scroll position and constant document height, so an empty viewport cannot pass as a fast render. Filtering from the bottom through empty results and opaque pinned headers during two-axis overflow have dedicated regression tests. Overview and inspector rendering, column sizing/order/visibility, hierarchy, selection, counter availability and process identity checks remain required.
 
 A live startup test requires the first populated system/process snapshot within two seconds. A separate blocking-reader test proves slow network collection cannot block the sampler or start overlapping requests. Lifecycle and icon tests check monitor deallocation, unused popover content, exited/reused process identities and bounded Retina icon representations.
 

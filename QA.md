@@ -43,3 +43,13 @@ A controlled Metal process reported 1,233,367,625 cumulative driver nanoseconds.
 The initial GPU build averaged 4.50% CPU over 30 seconds with the GPU view live and a two-second sampling interval. This is one observation on a busy development machine, not a cross-hardware benchmark. Universal DMG/ZIP verification passed locally. Native GPU screenshots use live driver values.
 
 Native GPU checks confirmed Command–6 selection, a narrower tiled-window layout without overlapping tabs, GPU time sorting in both directions, fifteen-minute history selection, light/dark main views and inspectors, and the gallery's paired GPU previews. A GPU export saved through the native panel parsed successfully with one device, 13 history points and 536 process rows, including 17 processes reporting GPU values and explicit absence for unavailable counters.
+
+## Version 1.5.0 performance validation — September 10, 2026
+
+- `swift test`: 87 tests, four opt-in benchmarks skipped, zero failures. The four release-mode benchmark tests passed separately, producing all 15 required measurements and the memory-growth result. Six performance-gate failure tests and six packaging/notarization failure tests also passed.
+- Headless tests render all six lists at 420 and 1,000 points in both themes, at the top, middle, bottom and after returning. Dedicated regressions verify filtering from the bottom through no results and an opaque pinned header during horizontal and vertical overflow.
+- Native checks exercised all six compact views, light/dark appearance, jump-to-end selection, filtering and no-results recovery, column divider dragging, draggable header reordering, overflow scrollbars, gallery previews and view selection. The menu-bar monitor retained Memory / 5 min after closing and reopening.
+- Exact chart samples, gaps, step paths, Audio Graph descriptors, limited-query/full-sort equivalence, network single-flight/PID identity, first populated snapshot, bounded caches, icon sizing and monitor deallocation have retained correctness checks.
+- The universal arm64/x86_64 app, strict ad-hoc signature, version 1.5.0, DMG integrity, mounted DMG contents, ZIP contents and checksums passed local verification.
+- See [measurements and interpretation](docs/performance/V1_5_RESULTS.md) and [future performance gates](docs/performance/OPTIMIZATION.md). Raster timings are not display FPS; memory growth is not a steady-state footprint claim.
+- Hosted macOS CI remained queued during validation. This release uses the locally tested and verified package; hosted Intel execution and physical Intel UI performance are not claimed. Signing remains ad-hoc, without Apple notarization.
