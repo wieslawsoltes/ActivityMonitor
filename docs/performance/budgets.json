@@ -62,6 +62,9 @@
     },
     "cpu.grid.12.15min": {
       "median_ms": 150
+    },
+    "cpu.grid.64.15min": {
+      "median_ms": 350
     }
   },
   "memory_growth_bytes": {

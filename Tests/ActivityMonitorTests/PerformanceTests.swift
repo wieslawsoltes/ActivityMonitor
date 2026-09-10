@@ -164,6 +164,16 @@ final class PerformanceTests: XCTestCase {
         CPUChartBrowser(series: series, range: 15, end: end, theme: .init(dark: true)),
         size: CGSize(width: 960, height: 400))
     }
+    let dense = (0..<64).map { index in
+      CPUUsageSeries(
+        id: String(index), title: "CPU \(index)", detail: "Logical processor",
+        points: series[0].points)
+    }
+    benchmark("cpu.grid.64.15min", iterations: 3) {
+      render(
+        CPUChartBrowser(series: dense, range: 15, end: end, theme: .init(dark: true)),
+        size: CGSize(width: 960, height: 400))
+    }
   }
   @MainActor func testStartupAndSupplementarySurfaces() throws {
     try enabled()

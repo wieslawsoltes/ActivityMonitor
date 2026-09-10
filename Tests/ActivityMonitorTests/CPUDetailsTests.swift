@@ -6,6 +6,32 @@ import XCTest
 @testable import ActivityMonitor
 
 final class CPUDetailsTests: XCTestCase {
+  func testGridFitsProcessorCountAndViewportWithoutPagination() {
+    for (count, size) in [
+      (1, CGSize(width: 360, height: 200)), (16, CGSize(width: 360, height: 240)),
+      (11, CGSize(width: 1200, height: 240)), (64, CGSize(width: 800, height: 300)),
+      (67, CGSize(width: 800, height: 260)), (128, CGSize(width: 1200, height: 600)),
+    ] {
+      let layout = CPUGridLayout(count: count, size: size)
+      XCTAssertFalse(layout.scrolls, "All \(count) charts should fit")
+      XCTAssertGreaterThanOrEqual(layout.columns * layout.rows, count)
+      XCTAssertLessThanOrEqual(
+        CGFloat(layout.rows) * layout.tileHeight + CGFloat(layout.rows - 1) * layout.spacing,
+        size.height)
+      XCTAssertLessThanOrEqual(
+        CGFloat(layout.columns) * layout.tileWidth + CGFloat(layout.columns - 1) * layout.spacing,
+        size.width)
+      XCTAssertGreaterThanOrEqual(layout.tileHeight, 38)
+    }
+    let dense = CPUGridLayout(count: 64, size: .init(width: 800, height: 300))
+    let filtered = CPUGridLayout(count: 4, size: .init(width: 800, height: 300))
+    XCTAssertGreaterThan(
+      filtered.tileWidth * filtered.tileHeight, dense.tileWidth * dense.tileHeight)
+    let huge = CPUGridLayout(count: 4096, size: .init(width: 360, height: 240))
+    XCTAssertTrue(huge.scrolls)
+    XCTAssertGreaterThanOrEqual(huge.tileWidth, 60)
+    XCTAssertGreaterThanOrEqual(huge.tileHeight, 38)
+  }
   func testPerProcessorRatesIncludeNiceWrapAndKeepIndependentBaselines() {
     var tracker = CPUCoreTracker()
     var a = AMCPUTicks()
@@ -139,7 +165,8 @@ final class CPUDetailsTests: XCTestCase {
     for dark in [false, true] {
       for width in [CGFloat(360), CGFloat(1060)] {
         let host = NSHostingView(
-          rootView: CPUChartBrowser(series: series, range: 1, end: now, theme: .init(dark: dark)))
+          rootView: CPUChartBrowser(
+            series: series, range: 1, end: now, theme: .init(dark: dark), threads: dark))
         let window = NSWindow(
           contentRect: NSRect(x: 0, y: 0, width: width, height: 350), styleMask: [.borderless],
           backing: .buffered, defer: false)

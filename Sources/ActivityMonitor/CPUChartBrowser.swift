@@ -20,6 +20,38 @@ struct CPUChartModePicker: View {
     }.menuStyle(.borderlessButton).fixedSize().help("CPU chart display")
   }
 }
+/// Fit every chart when legible, then retain a minimum tile size and scroll vertically.
+struct CPUGridLayout {
+  let columns: Int
+  let rows: Int
+  let tileWidth: CGFloat
+  let tileHeight: CGFloat
+  let spacing: CGFloat
+  let scrolls: Bool
+  init(count: Int, size: CGSize) {
+    let count = max(1, count)
+    let gap: CGFloat = count > 32 ? 4 : 8
+    let width = max(1, size.width - 12)
+    let height = max(1, size.height - 2)
+    let maximumColumns = min(count, max(1, Int((width + gap) / (60 + gap))))
+    var best: (columns: Int, rows: Int, width: CGFloat, height: CGFloat, score: Double)?
+    for columns in 1...maximumColumns {
+      let rows = (count + columns - 1) / columns
+      let w = (width - CGFloat(columns - 1) * gap) / CGFloat(columns)
+      let h = (height - CGFloat(rows - 1) * gap) / CGFloat(rows)
+      guard h >= 38 else { continue }
+      let score =
+        abs(log(Double(w / h) / 1.85)) + Double(columns * rows - count) / Double(count) * 0.2
+      if best == nil || score < best!.score { best = (columns, rows, w, h, score) }
+    }
+    columns = best?.columns ?? maximumColumns
+    rows = (count + columns - 1) / columns
+    tileWidth = best?.width ?? (width - CGFloat(columns - 1) * gap) / CGFloat(columns)
+    tileHeight = best?.height ?? 48
+    spacing = gap
+    scrolls = best == nil
+  }
+}
 struct CPUChartBrowser: View {
   let series: [CPUUsageSeries]
   let range: Int
@@ -28,9 +60,10 @@ struct CPUChartBrowser: View {
   var threads = false
   var status: String? = nil
   @State private var query = ""
+  @State private var paginated = false
   @State private var page = 0
-  @State private var inspected: String?
   private let pageSize = 12
+  @State private var inspected: String?
   private var filtered: [CPUUsageSeries] {
     series.filter {
       query.isEmpty || ($0.title + " " + $0.detail).localizedCaseInsensitiveContains(query)
@@ -38,36 +71,46 @@ struct CPUChartBrowser: View {
   }
   private var currentPage: Int { min(page, max(0, (filtered.count - 1) / pageSize)) }
   private var visible: [CPUUsageSeries] {
-    Array(filtered.dropFirst(currentPage * pageSize).prefix(pageSize))
+    paginated ? Array(filtered.dropFirst(currentPage * pageSize).prefix(pageSize)) : filtered
   }
   var body: some View {
     VStack(alignment: .leading, spacing: 10) {
       HStack(spacing: 8) {
         Text(
-          filtered.isEmpty
-            ? "0 \(threads ? "threads" : "processors")"
-            : "\(currentPage * pageSize + 1)–\(min((currentPage + 1) * pageSize, filtered.count)) of \(filtered.count)"
+          paginated && !filtered.isEmpty
+            ? "\(currentPage * pageSize + 1)–\(min((currentPage + 1) * pageSize, filtered.count)) of \(filtered.count)"
+            : "\(filtered.count) \(threads ? "threads" : "processors")"
         )
         .font(.system(size: 10)).foregroundStyle(theme.secondary).monospacedDigit()
         Spacer(minLength: 0)
+        Menu {
+          Picker("Chart layout", selection: $paginated) {
+            Text("Fit all charts").tag(false)
+            Text("Paged charts").tag(true)
+          }
+        } label: {
+          Text(paginated ? "Paged" : "Fit all").font(.system(size: 10))
+        }.menuStyle(.borderlessButton).fixedSize().help("Chart layout")
         TextField(threads ? "Find thread" : "Find processor", text: $query)
           .textFieldStyle(.plain).font(.system(size: 10)).padding(6).frame(width: 110)
           .background(theme.subtle, in: RoundedRectangle(cornerRadius: 5))
           .accessibilityLabel(threads ? "Find thread" : "Find processor")
-        Button {
-          page = max(0, currentPage - 1)
-        } label: {
-          Image(systemName: "chevron.left")
+        if paginated {
+          Button {
+            page = max(0, currentPage - 1)
+          } label: {
+            Image(systemName: "chevron.left")
+          }
+          .disabled(currentPage == 0).help("Previous charts")
+          Button {
+            page = currentPage + 1
+          } label: {
+            Image(systemName: "chevron.right")
+          }
+          .disabled((currentPage + 1) * pageSize >= filtered.count).help("Next charts")
         }
-        .disabled(currentPage == 0).help("Previous charts")
-        Button {
-          page = currentPage + 1
-        } label: {
-          Image(systemName: "chevron.right")
-        }
-        .disabled((currentPage + 1) * pageSize >= filtered.count).help("Next charts")
       }.buttonStyle(.plain)
-      if visible.isEmpty {
+      if filtered.isEmpty {
         VStack(spacing: 8) {
           Image(systemName: "cpu").font(.system(size: 24, weight: .light))
           Text(query.isEmpty ? status ?? "Waiting for processor samples" : "No matching charts")
@@ -75,15 +118,12 @@ struct CPUChartBrowser: View {
         }.foregroundStyle(theme.secondary).frame(maxWidth: .infinity, maxHeight: .infinity)
       } else {
         GeometryReader { geometry in
-          let columns = min(6, max(1, Int(geometry.size.width / 190)))
-          let rows = max(1, (visible.count + columns - 1) / columns)
-          let chartHeight = max(
-            36, min(160, (geometry.size.height - Double(rows - 1) * 10) / Double(rows) - 52))
+          let layout = CPUGridLayout(count: visible.count, size: geometry.size)
           ScrollView {
             LazyVGrid(
               columns: Array(
-                repeating: GridItem(.flexible(), spacing: 10),
-                count: columns), spacing: 10
+                repeating: GridItem(.flexible(), spacing: layout.spacing),
+                count: layout.columns), spacing: layout.spacing
             ) {
               ForEach(visible) { item in
                 Button {
@@ -91,9 +131,11 @@ struct CPUChartBrowser: View {
                 } label: {
                   CPUChartTile(
                     series: item, range: range, end: end, theme: theme, threads: threads,
-                    chartHeight: chartHeight)
+                    tileWidth: layout.tileWidth, tileHeight: layout.tileHeight)
                 }.buttonStyle(.plain)
-                  .help("Inspect \(item.title) · \(item.detail)")
+                  .help(
+                    "\(item.title) · \(item.detail) · \(item.latest.map { String(format: "%.1f%%", $0) } ?? "Unavailable") · Select to inspect"
+                  )
                   .popover(
                     isPresented: Binding(
                       get: { inspected == item.id }, set: { if !$0 { inspected = nil } })
@@ -103,7 +145,7 @@ struct CPUChartBrowser: View {
                       range: range, end: end, theme: theme, threads: threads)
                   }
               }
-            }.padding(1)
+            }.padding(.trailing, 12).padding(.vertical, 1)
           }
         }
       }
@@ -111,11 +153,12 @@ struct CPUChartBrowser: View {
         Text("History is shortened for large thread counts to limit memory use.")
           .font(.system(size: 10)).foregroundStyle(theme.secondary)
       }
-      if let status, !visible.isEmpty {
+      if let status, !filtered.isEmpty {
         Text(status).font(.system(size: 10)).foregroundStyle(theme.secondary).lineLimit(2).help(
           status)
       }
     }.onChange(of: query) { page = 0 }
+      .onChange(of: paginated) { page = 0 }
       .onChange(of: series.map(\.id)) { _, ids in
         if let inspected, !ids.contains(inspected) { self.inspected = nil }
       }
@@ -127,20 +170,28 @@ private struct CPUChartTile: View {
   let end: Date
   let theme: MonitorTheme
   let threads: Bool
-  var chartHeight: CGFloat = 36
+  let tileWidth: CGFloat
+  let tileHeight: CGFloat
+  private var compact: Bool { tileWidth < 140 || tileHeight < 78 }
   @State private var hovering = false
   var body: some View {
-    VStack(alignment: .leading, spacing: 4) {
-      HStack(spacing: 4) {
-        Text(series.title).font(.system(size: 10, weight: .medium)).lineLimit(1)
-        Spacer(minLength: 0)
-        Text(series.latest.map { String(format: "%.1f%%", $0) } ?? "—")
-          .font(.system(size: 10, weight: .semibold)).monospacedDigit().foregroundStyle(theme.blue)
+    VStack(alignment: .leading, spacing: compact ? 2 : 4) {
+      HStack(spacing: 3) {
+        Text(compact && threads && !series.detail.isEmpty ? series.detail : series.title)
+          .font(.system(size: compact ? 8 : 10, weight: .medium)).lineLimit(1)
+        if tileWidth >= 110 {
+          Spacer(minLength: 0)
+          Text(series.latest.map { String(format: "%.1f%%", $0) } ?? "—")
+            .font(.system(size: compact ? 8 : 10, weight: .semibold))
+            .monospacedDigit().foregroundStyle(theme.blue)
+        }
       }
-      Text(
-        series.detail.isEmpty ? (threads ? "Unnamed thread" : "Logical processor") : series.detail
-      )
-      .font(.system(size: 9)).foregroundStyle(theme.secondary).lineLimit(1)
+      if !compact {
+        Text(
+          series.detail.isEmpty ? (threads ? "Unnamed thread" : "Logical processor") : series.detail
+        )
+        .font(.system(size: 9)).foregroundStyle(theme.secondary).lineLimit(1)
+      }
       let start = end.addingTimeInterval(Double(-range * 60))
       let samples = CPUChartData.samples(series, since: start)
       let maximum = CPUChartData.maximum(series, since: start, threads: threads)
@@ -160,8 +211,8 @@ private struct CPUChartTile: View {
           context.fill(area, with: .color(color.opacity(0.12)))
           context.stroke(line, with: .color(color), lineWidth: 1)
         }
-      }.frame(height: chartHeight).accessibilityHidden(true)
-    }.padding(9).background(
+      }.frame(maxHeight: .infinity).accessibilityHidden(true)
+    }.padding(compact ? 4 : 9).frame(height: tileHeight).background(
       hovering ? theme.hover : theme.subtle, in: RoundedRectangle(cornerRadius: 8)
     )
     .overlay(RoundedRectangle(cornerRadius: 8).stroke(theme.border, lineWidth: 1))
