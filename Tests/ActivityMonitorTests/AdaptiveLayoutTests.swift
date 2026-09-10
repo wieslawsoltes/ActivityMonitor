@@ -50,6 +50,38 @@ final class AdaptiveLayoutTests: XCTestCase {
     XCTAssertFalse(MonitorLayout(width: 1440, height: 900).denseOverview)
     XCTAssertEqual(OverviewGrid.frames(width: 1748, expanded: true)[2].maxY, 280)
   }
+  func testProcessListFillsRemainingViewportAcrossResizeAndOverviewChanges() {
+    // Includes collapsed details, two-row summaries, and expanded disclosure content.
+    for viewport in [CGFloat(638), 778, 1100, 1600] {
+      for overview in [CGFloat(184), 316, 498] {
+        let frames = WorkspaceLayout.frames(
+          width: 492, viewportHeight: viewport, overviewHeights: [42, overview])
+        let list = frames.last!
+        XCTAssertEqual(list.minY, 42 + overview)
+        XCTAssertGreaterThanOrEqual(list.height, 340)
+        XCTAssertEqual(list.maxY, max(viewport, list.minY + 340))
+        XCTAssertEqual(frames[0].maxY, frames[1].minY)
+        XCTAssertEqual(frames[1].maxY, list.minY)
+      }
+    }
+    let collapsed = WorkspaceLayout.frames(
+      width: 492, viewportHeight: 1000, overviewHeights: [42, 184]
+    ).last!
+    let expanded = WorkspaceLayout.frames(
+      width: 492, viewportHeight: 1000, overviewHeights: [42, 498]
+    ).last!
+    XCTAssertEqual(collapsed.maxY, expanded.maxY)
+    XCTAssertEqual(collapsed.height - expanded.height, 498 - 184)
+  }
+
+  func testShortWorkspaceScrollsInsteadOfCrushingProcessList() {
+    let list = WorkspaceLayout.frames(
+      width: 392, viewportHeight: 358, overviewHeights: [42, 498]
+    ).last!
+    XCTAssertEqual(list.height, 340)
+    XCTAssertGreaterThan(list.maxY, 358)
+  }
+
   func testPriorityColumnsRetainSortAndRespectAvailableColumns() {
     let columns = ["primary", "gpuTime", "cpu", "memory", "pid", "user"].map {
       ProcessColumn(id: $0, title: $0, weight: 1)

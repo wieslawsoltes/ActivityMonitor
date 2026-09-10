@@ -70,11 +70,13 @@ struct ContentView: View {
       VStack(spacing: 0) {
         adaptiveTitlebar(layout)
         if layout.scrollsWorkspace {
-          ScrollView {
-            workspace(layout, scrolling: true)
+          GeometryReader { viewport in
+            ScrollView {
+              workspace(layout, viewportHeight: viewport.size.height)
+            }
           }
         } else {
-          workspace(layout, scrolling: false)
+          workspace(layout)
         }
         if layout.standard {
           statusbar
@@ -199,8 +201,12 @@ struct ContentView: View {
         }.hidden()
       }
   }
-  @ViewBuilder func workspace(_ layout: MonitorLayout, scrolling: Bool) -> some View {
-    VStack(spacing: 0) {
+  @ViewBuilder func workspace(_ layout: MonitorLayout, viewportHeight: CGFloat? = nil) -> some View
+  {
+    let container =
+      viewportHeight.map { AnyLayout(WorkspaceLayout(viewportHeight: $0)) }
+      ?? AnyLayout(VStackLayout(spacing: 0))
+    container {
       if !layout.denseOverview {
         sectionHeading.padding(.top, 23).padding(.bottom, 20)
       } else {
@@ -232,8 +238,7 @@ struct ContentView: View {
         if inspector && layout.inlineInspector {
           inspectorPanel.frame(width: layout.inspectorWidth)
         }
-      }.frame(height: scrolling ? max(340, layout.height - 430) : nil)
-        .frame(maxHeight: scrolling ? nil : .infinity)
+      }.frame(maxHeight: .infinity)
     }.padding(.horizontal, layout.gutter)
   }
   var inspectorPanel: some View {
