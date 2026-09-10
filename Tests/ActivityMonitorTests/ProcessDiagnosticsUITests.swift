@@ -34,6 +34,8 @@ import XCTest
             "Send queue",
           ]
         case .maps, .images: columns = ["Address", "Size", "Resident", "Protection", "Path"]
+        case .ports: columns = ["Name", "Rights", "Mask"]
+        case .fileports: columns = ["Port name", "Descriptor type"]
         default: columns = ["Name", "Rights", "Type"]
         }
         let records: [DiagnosticRecord] = (0..<2500).map { index in
@@ -106,6 +108,16 @@ import XCTest
           host.layoutSubtreeIfNeeded()
           let bitmap = try XCTUnwrap(host.bitmapImageRepForCachingDisplay(in: host.bounds))
           host.cacheDisplay(in: host.bounds, to: bitmap)
+          if let directory = ProcessInfo.processInfo.environment["AM_RENDER_DIR"],
+            tab == .files || tab == .maps,
+            let png = bitmap.representation(using: .png, properties: [:])
+          {
+            let url = URL(fileURLWithPath: directory).appendingPathComponent(
+              "diagnostic-\(tab.rawValue)-\(dark ? "dark" : "light")-\(Int(size.width)).png")
+            try FileManager.default.createDirectory(
+              at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+            try png.write(to: url)
+          }
           XCTAssertGreaterThan(bitmap.pixelsWide, 700, "\(tab) \(dark)")
           XCTAssertEqual(host.bounds.width, size.width, accuracy: 1)
           if tab.metric == nil && tab != .overview && tab != .reports {
@@ -117,6 +129,15 @@ import XCTest
             XCTAssertTrue(table.allowsColumnReordering)
             let scroll = try XCTUnwrap(table.enclosingScrollView)
             XCTAssertLessThanOrEqual(scroll.frame.maxX, host.bounds.width + 1)
+            let visible = table.tableColumns.filter { !$0.isHidden }
+            if let expected = DiagnosticColumnLayout.defaults(tab.rawValue) {
+              XCTAssertEqual(
+                Set(visible.map(\.title)),
+                expected.intersection(Set(session.sections[tab]!.columns)))
+            }
+            XCTAssertLessThanOrEqual(
+              table.bounds.width, scroll.contentSize.width + 1,
+              "Default columns overflow in \(tab) at \(size)")
             table.scrollRowToVisible(2499)
             host.layoutSubtreeIfNeeded()
             XCTAssertTrue(table.rows(in: scroll.documentVisibleRect).contains(2499))
@@ -165,6 +186,60 @@ import XCTest
     XCTAssertEqual(table.numberOfRows, 1)
     XCTAssertEqual(table.selectedRow, 0)
   }
+  func testDiagnosticColumnCustomizationAndAdaptiveFit() async throws {
+    let titles = ["FD", "Type", "Path", "Size", "Offset", "Inode", "Access"]
+    let section = DiagnosticSection(
+      columns: titles,
+      records: [
+        DiagnosticRecord(
+          id: "1", cells: ["FD": "42", "Path": "/a/long/path/file.txt", "Size": "512 KB"],
+          numbers: ["FD": 42])
+      ], status: "1 entry", date: Date())
+    let host = NSHostingView(
+      rootView: DiagnosticTable(
+        section: section, query: "", key: "Open files",
+        theme: .init(dark: false), persistColumns: false))
+    let window = NSWindow(
+      contentRect: NSRect(x: 0, y: 0, width: 540, height: 300),
+      styleMask: [.borderless], backing: .buffered, defer: false)
+    window.isReleasedWhenClosed = false
+    window.contentView = host
+    defer {
+      window.contentView = nil
+      window.close()
+    }
+    host.layoutSubtreeIfNeeded()
+    let table = try XCTUnwrap(descendant(host, NSTableView.self))
+    let scroll = try XCTUnwrap(table.enclosingScrollView)
+    let coordinator = try XCTUnwrap(table.delegate as? DiagnosticTable.Coordinator)
+    for width in [540.0, 900.0, 540.0] {
+      window.setContentSize(NSSize(width: width, height: 300))
+      host.layoutSubtreeIfNeeded()
+      coordinator.fitColumns()
+      XCTAssertLessThanOrEqual(table.bounds.width, scroll.contentSize.width + 1)
+      XCTAssertTrue(coordinator.automaticSizing)
+    }
+    let path = try XCTUnwrap(table.tableColumns.first { $0.title == "Path" })
+    path.width = 850
+    XCTAssertFalse(coordinator.automaticSizing)
+    coordinator.fitColumns()
+    XCTAssertEqual(path.width, 850, accuracy: 1)
+    let menu = try XCTUnwrap(table.headerView?.menu)
+    let inodeItem = try XCTUnwrap(menu.items.first { $0.title == "Inode" })
+    coordinator.toggleColumn(inodeItem)
+    XCTAssertFalse((inodeItem.representedObject as! NSTableColumn).isHidden)
+    table.moveColumn(0, toColumn: 2)
+    coordinator.restoreDefaults()
+    XCTAssertEqual(table.tableColumns.map(\.title), titles)
+    XCTAssertEqual(
+      Set(table.tableColumns.filter { !$0.isHidden }.map(\.title)), ["FD", "Type", "Path", "Size"])
+    XCTAssertLessThanOrEqual(table.bounds.width, scroll.contentSize.width + 1)
+    let field = try XCTUnwrap(
+      coordinator.tableView(table, viewFor: table.tableColumns[0], row: 0) as? NSTextField)
+    XCTAssertEqual(field.alignment, .right)
+    XCTAssertEqual(field.toolTip, "42")
+  }
+
   func testAccessDeniedDoesNotClaimExitAndRefreshSwitchesToLatestTab() async throws {
     let row = PerformanceFixture.rows(1)[0]
     let denied = ProcessDiagnosticSession(

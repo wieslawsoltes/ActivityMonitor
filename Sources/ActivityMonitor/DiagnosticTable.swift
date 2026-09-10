@@ -11,7 +11,7 @@ struct DiagnosticTable: NSViewRepresentable {
   var persistColumns = true
   func makeCoordinator() -> Coordinator { Coordinator() }
   func makeNSView(context: Context) -> NSScrollView {
-    let scroll = NSScrollView()
+    let scroll = DiagnosticScrollView()
     scroll.hasVerticalScroller = true
     scroll.hasHorizontalScroller = true
     scroll.autohidesScrollers = true
@@ -40,6 +40,7 @@ struct DiagnosticTable: NSViewRepresentable {
     }
     table.menu = menu
     context.coordinator.table = table
+    scroll.fitColumns = { [weak coordinator = context.coordinator] in coordinator?.fitColumns() }
     scroll.documentView = table
     updateNSView(scroll, context: context)
     return scroll
@@ -52,24 +53,42 @@ struct DiagnosticTable: NSViewRepresentable {
     if c.key != key || c.columns != section.columns {
       c.key = key
       c.columns = section.columns
+      c.adjustingColumns = true
+      c.persistColumns = persistColumns
+      c.automaticSizing = true
       table.autosaveTableColumns = false
       for column in table.tableColumns { table.removeTableColumn(column) }
       for title in section.columns {
         let column = NSTableColumn(identifier: NSUserInterfaceItemIdentifier(title))
         column.title = title
-        column.minWidth = 55
+        column.minWidth = DiagnosticColumnLayout.minimum(title)
         column.maxWidth = 2400
         column.width =
           ["Path", "Local endpoint", "Remote endpoint", "Name"].contains(title)
           ? 280 : max(90, CGFloat(title.count) * 7 + 26)
+        column.headerCell.alignment = DiagnosticColumnLayout.numeric(title) ? .right : .left
         column.resizingMask = .userResizingMask
         column.sortDescriptorPrototype = NSSortDescriptor(key: title, ascending: true)
         table.addTableColumn(column)
       }
+      let initialWidths = Dictionary(
+        uniqueKeysWithValues: table.tableColumns.map { ($0.title, $0.width) })
       if persistColumns {
         table.autosaveName = "ProcessDiagnostics.\(key).v1"
         table.autosaveTableColumns = true
       }
+      // Preserve an existing customized native layout. Untouched legacy layouts
+      // migrate to the compact defaults instead of restoring every metadata column.
+      let customized =
+        table.tableColumns.map { $0.title } != section.columns
+        || table.tableColumns.contains { column in
+          return column.isHidden
+            || abs(column.width - (initialWidths[column.title] ?? column.width)) > 1
+        }
+      let savedMode =
+        persistColumns ? UserDefaults.standard.object(forKey: c.sizingKey) as? Bool : nil
+      c.automaticSizing = savedMode ?? !customized
+      if savedMode == nil && !customized { c.applyDefaults() }
       let menu = NSMenu()
       for column in table.tableColumns {
         let item = NSMenuItem(
@@ -79,7 +98,19 @@ struct DiagnosticTable: NSViewRepresentable {
         item.state = column.isHidden ? .off : .on
         menu.addItem(item)
       }
+      menu.addItem(.separator())
+      for (title, action) in [
+        ("Fit columns to window", #selector(Coordinator.fitToWindow)),
+        ("Restore default columns", #selector(Coordinator.restoreDefaults)),
+      ] {
+        let item = NSMenuItem(title: title, action: action, keyEquivalent: "")
+        item.target = c
+        menu.addItem(item)
+      }
       table.headerView?.menu = menu
+      c.adjustingColumns = false
+      c.fitColumns()
+      c.saveSizing()
       c.date = nil
     }
     table.appearance = NSAppearance(named: theme.dark ? .darkAqua : .aqua)
@@ -106,6 +137,64 @@ struct DiagnosticTable: NSViewRepresentable {
     var key = "", columns: [String] = [], source: [DiagnosticRecord] = [],
       rows: [DiagnosticRecord] = []
     var query = "", date: Date?
+    var adjustingColumns = false, automaticSizing = true, persistColumns = true
+    var sizingKey: String { "ProcessDiagnostics.\(key).automaticSizing" }
+    func saveSizing() {
+      if persistColumns { UserDefaults.standard.set(automaticSizing, forKey: sizingKey) }
+    }
+    func applyDefaults() {
+      guard let table else { return }
+      let defaults = DiagnosticColumnLayout.defaults(key)
+      for column in table.tableColumns {
+        column.isHidden = defaults.map { !$0.contains(column.title) } ?? false
+      }
+      // Unknown or partial schemas must always leave at least one column visible.
+      if table.tableColumns.allSatisfy(\.isHidden) { table.tableColumns.first?.isHidden = false }
+    }
+    @objc func restoreDefaults() {
+      guard let table else { return }
+      adjustingColumns = true
+      for (index, title) in columns.enumerated() {
+        let current = table.column(withIdentifier: NSUserInterfaceItemIdentifier(title))
+        if current >= 0 && current != index { table.moveColumn(current, toColumn: index) }
+      }
+      applyDefaults()
+      adjustingColumns = false
+      fitToWindow()
+    }
+    @objc func fitToWindow() {
+      automaticSizing = true
+      saveSizing()
+      fitColumns()
+    }
+    func fitColumns() {
+      guard automaticSizing, !adjustingColumns, let table,
+        let scroll = table.enclosingScrollView, scroll.contentSize.width > 0
+      else { return }
+      adjustingColumns = true
+      defer { adjustingColumns = false }
+      let visible = table.tableColumns.filter { !$0.isHidden }
+      let available = max(
+        0, scroll.contentSize.width - CGFloat(visible.count) * table.intercellSpacing.width)
+      let minima = visible.map { DiagnosticColumnLayout.minimum($0.title) }
+      let surplus = max(0, available - minima.reduce(0, +))
+      let weights = visible.map { DiagnosticColumnLayout.flexible($0.title) ? 5.0 : 1.0 }
+      let totalWeight = max(1, weights.reduce(0, +))
+      for index in visible.indices {
+        visible[index].width = minima[index] + surplus * weights[index] / totalWeight
+      }
+      table.sizeToFit()
+      let contentWidth = visible.reduce(CGFloat.zero) {
+        $0 + $1.width + table.intercellSpacing.width
+      }
+      table.setFrameSize(
+        NSSize(width: max(scroll.contentSize.width, contentWidth), height: table.frame.height))
+    }
+    func tableViewColumnDidResize(_ notification: Notification) {
+      guard !adjustingColumns else { return }
+      automaticSizing = false
+      saveSizing()
+    }
     func refresh() {
       let selection = Set(
         table?.selectedRowIndexes.compactMap { rows.indices.contains($0) ? rows[$0].id : nil } ?? []
@@ -160,10 +249,17 @@ struct DiagnosticTable: NSViewRepresentable {
         tableView.makeView(withIdentifier: identifier, owner: self) as? NSTextField
         ?? NSTextField(labelWithString: "")
       field.identifier = identifier
-      field.font = .monospacedDigitSystemFont(ofSize: 12, weight: .regular)
+      let numeric = DiagnosticColumnLayout.numeric(column.title)
+      field.font =
+        numeric
+        ? .monospacedDigitSystemFont(ofSize: 12, weight: .regular)
+        : .systemFont(ofSize: 12)
+      field.alignment = numeric ? .right : .left
       field.textColor = NSColor(theme.text)
-      field.lineBreakMode = .byTruncatingMiddle
-      field.stringValue = rows[row].cells[column.title] ?? "—"
+      field.lineBreakMode =
+        DiagnosticColumnLayout.flexible(column.title) ? .byTruncatingMiddle : .byTruncatingTail
+      let value = rows[row].cells[column.title] ?? ""
+      field.stringValue = value.isEmpty ? "—" : value
       field.toolTip = field.stringValue
       field.setAccessibilityLabel(column.title + ": " + field.stringValue)
       return field
@@ -198,8 +294,13 @@ struct DiagnosticTable: NSViewRepresentable {
       else { return }
       column.isHidden.toggle()
       sender.state = column.isHidden ? .off : .on
+      fitColumns()
     }
     func validateMenuItem(_ item: NSMenuItem) -> Bool {
+      if let column = item.representedObject as? NSTableColumn {
+        item.state = column.isHidden ? .off : .on
+        return column.isHidden || (table?.tableColumns.filter { !$0.isHidden }.count ?? 0) > 1
+      }
       if item.action == #selector(reveal) { return selected.contains { $0.path != nil } }
       if item.action == #selector(copyRows) { return !selected.isEmpty }
       return true
@@ -235,4 +336,55 @@ private final class DiagnosticRowView: NSTableRowView {
     NSRect(x: 0, y: 0, width: 2, height: bounds.height).fill()
   }
   override var interiorBackgroundStyle: NSView.BackgroundStyle { .normal }
+}
+
+/// Column policies keep the initial diagnostic tables readable at the minimum window
+/// width. All source fields remain available for searching, export and customization.
+enum DiagnosticColumnLayout {
+  static func defaults(_ key: String) -> Set<String>? {
+    switch key {
+    case "Threads": return ["Thread ID", "Name", "CPU %", "User time", "State"]
+    case "Open files": return ["FD", "Type", "Path", "Size"]
+    case "Connections": return ["FD", "Protocol", "Local endpoint", "Remote endpoint", "State"]
+    case "Memory map": return ["Address", "Size", "Resident", "Path"]
+    case "Mapped images": return ["Path", "Size", "Resident"]
+    case "Mach ports": return ["Name", "Rights"]
+    case "Fileports": return ["Port name", "Descriptor type"]
+    default: return nil
+    }
+  }
+  static func flexible(_ title: String) -> Bool {
+    ["Path", "Name", "Local endpoint", "Remote endpoint", "Rights"].contains(title)
+  }
+  static func numeric(_ title: String) -> Bool {
+    [
+      "FD", "Thread ID", "CPU %", "User time", "System time", "Size", "Resident",
+      "Private resident", "Shared resident", "Swapped", "Dirty", "Offset", "Inode",
+      "Priority", "Base priority", "Max priority", "Sleep seconds", "References",
+      "Receive queue", "Send queue",
+    ].contains(title)
+  }
+  static func minimum(_ title: String) -> CGFloat {
+    switch title {
+    case "FD": return 30
+    case "CPU %": return 52
+    case "Thread ID": return 72
+    case "Address", "Thread handle": return 140
+    case "Path": return 120
+    case "Local endpoint", "Remote endpoint": return 100
+    case "Name", "Rights": return 90
+    case "Size", "Resident", "User time", "System time": return 72
+    case "Protocol", "Type": return 60
+    case "State": return 78
+    default: return max(65, CGFloat(title.count) * 6 + 16)
+    }
+  }
+}
+
+private final class DiagnosticScrollView: NSScrollView {
+  var fitColumns: (() -> Void)?
+  override func layout() {
+    super.layout()
+    fitColumns?()
+  }
 }

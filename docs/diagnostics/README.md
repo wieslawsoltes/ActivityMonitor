@@ -17,6 +17,8 @@ The workspace provides:
 - **Mapped images:** executable file mappings. Libraries within the shared dyld cache may not appear individually; a virtual-memory report provides additional context.
 - **Reports:** stack sampling, complete `lsof` output, `vmmap`, launch arguments, environment, code signature, and entitlements. Reports are collected only on request.
 
+Diagnostic tables initially show a compact selection of useful columns and fit the available window width. Right-click any column header to show extra fields, fit the current columns to the window, or restore the defaults. Manually resized columns retain their widths; horizontal scrolling remains available for wider custom layouts. Numeric values align to the right, and hovering reveals complete values and paths. Search and CSV exports include hidden fields.
+
 Tables support column resizing, double-click fitting, drag reordering, sorting, header-menu visibility, multiple selection, keyboard navigation, ⌘C, and Finder reveal for file paths. Column layouts are remembered separately per diagnostic table. Filter and export tables as CSV, save reports as text, or export the collected process snapshot, history and reports as JSON.
 
 ## Memory visualizations
