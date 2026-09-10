@@ -21,7 +21,7 @@ Keep an eye on performance, understand resource usage, and find the processes th
 
 | View | What you can see |
 | :--- | :--- |
-| **CPU** | Live processor usage, the busiest processes, CPU time and thread counts. |
+| **CPU** | Live processor usage, optional charts for each logical processor, performance/efficiency core counts, and the busiest processes. |
 | **Memory** | Memory pressure, active and compressed memory, swap, and each process’s footprint. |
 | **Energy** | Battery charge, charging status, Low Power Mode, thermal state and application CPU workload. |
 | **Disk** | Process reads and writes, transfer totals and current throughput. |
@@ -34,6 +34,7 @@ Keep an eye on performance, understand resource usage, and find the processes th
 - **Personal layouts.** Default columns fit the available width without unnecessary horizontal scrolling. Resize header dividers, double-click to fit contents, and drag columns into your preferred order. Each view remembers its widths, order and visible columns. Select ranges or multiple processes, copy rows, and explore parent/child process trees.
 - **Look closer.** Open a process workspace with activity histories, threads, files, connections, ports, memory maps and diagnostic reports. Detach it into a floating tool window or pin the process to the menu bar.
 - **Take action.** Quit or force quit your processes, with confirmation before termination.
+- **See every processor.** Switch from one CPU chart to individual logical processors. Inspect each history, filter performance or efficiency cores when identified, or explore individual threads in a process workspace and its menu-bar pin.
 - **Follow changes.** Switch between one-, five- and fifteen-minute histories, adjust the refresh interval or pause the view.
 - **Keep a record.** Export process data as CSV or JSON and save diagnostic reports.
 - **Stay informed.** Open all six views from your menu bar, with live charts, device details and the busiest processes.
@@ -49,6 +50,14 @@ Keep several process monitors open as independent tool windows, float one above 
 | ![Process CPU diagnostics in light appearance](docs/screenshots/diagnostics/cpu-light.jpg) | ![Process CPU diagnostics in dark appearance](docs/screenshots/diagnostics/cpu-dark.jpg) |
 
 [Explore process diagnostics](docs/diagnostics/README.md).
+
+## See every core
+
+Keep one combined CPU chart or switch to individual logical processors. See performance and efficiency core counts where macOS exposes them, compare utilization and inspect each history. Process workspaces also offer individual thread charts.
+
+| Logical processors · Light | Logical processors · Dark |
+| :---: | :---: |
+| ![Logical processor histories in light appearance](docs/screenshots/cpu-details/processors-light.jpg) | ![Logical processor histories in dark appearance](docs/screenshots/cpu-details/processors-dark.jpg) |
 
 ## Comfortable in any light
 

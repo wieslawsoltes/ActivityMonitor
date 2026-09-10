@@ -19,6 +19,16 @@ The workspace provides:
 
 Tables support column resizing, double-click fitting, drag reordering, sorting, header-menu visibility, multiple selection, keyboard navigation, ⌘C, and Finder reveal for file paths. Column layouts are remembered separately per diagnostic table. Filter and export tables as CSV, save reports as text, or export the collected process snapshot, history and reports as JSON.
 
+## Individual thread charts
+
+CPU and Energy pages offer **One chart → Individual threads**, including in tool windows and process menu-bar pins. One chart remains the default. The thread grid shows each thread’s name or unique ID, its current CPU usage and history. Filter threads, page through twelve at a time, and select a tile for a larger interactive chart. Blue shows total CPU and pink shows system CPU. Threads can move between processors; these charts do not claim core affinity.
+
+Collection begins when enabled and refreshes at most every two seconds, subject to the main refresh interval. Returning to One chart stops it. Both local and global pause freeze updates. Missing counters remain unavailable; newly observed threads need two readings. Histories are limited to fifteen minutes and a shared memory budget, which shortens retained history for very large thread counts. Exited threads disappear from the active grid. Collected thread histories are included in diagnostic JSON exports.
+
+| Individual threads · Light | Individual threads · Dark |
+| :---: | :---: |
+| ![Thread CPU charts light](../screenshots/cpu-details/threads-light.jpg) | ![Thread CPU charts dark](../screenshots/cpu-details/threads-dark.jpg) |
+
 ## Appearances
 
 | View | Light | Dark |
@@ -36,7 +46,7 @@ A pin retains the process session after its dialog and tool window close. Unpinn
 
 ## Collection and availability
 
-The main monitor supplies activity at the selected global interval. Local pause freezes an individual session; global pause freezes activity for all sessions. Detailed information refreshes at most every five seconds while a dialog or tool window is open. Menu bar pins alone retain lightweight activity collection without continuing expensive detail scans. Manual refresh is available while paused.
+The main monitor supplies activity at the selected global interval. Local pause freezes an individual session; global pause freezes activity for all sessions. Detailed information refreshes at most every five seconds while a dialog or tool window is open. Menu bar pins alone retain lightweight activity collection without continuing expensive detail scans, unless individual thread charts were explicitly enabled. Manual refresh is available while paused.
 
 Only the currently selected detailed table is collected. Each table retains its own timestamp and last snapshot, so switching pages does not misrepresent an older snapshot as newly collected. Process identity is checked before and after collection; PID/start-time mismatches discard the result. A permissions failure is reported as unavailable rather than as an exit.
 
