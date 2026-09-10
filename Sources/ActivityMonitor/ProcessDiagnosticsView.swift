@@ -222,14 +222,6 @@ struct ProcessDiagnosticsView: View {
       Spacer(minLength: 0)
       if session.tab.metric != nil {
         DiagnosticRangePicker(selection: $session.range, theme: theme)
-      } else if session.tab != .overview && session.tab != .reports {
-        TextField("Filter entries", text: $query).textFieldStyle(.roundedBorder).frame(width: 150)
-        Button {
-          exportSection()
-        } label: {
-          Image(systemName: "square.and.arrow.up")
-        }
-        .help("Export table as CSV").buttonStyle(MonitorIconButton(theme: theme))
       }
     }.padding(.horizontal, 22).padding(.top, 22).padding(.bottom, 18)
   }
@@ -309,37 +301,93 @@ struct ProcessDiagnosticsView: View {
     } else if session.tab == .reports {
       reports
     } else {
-      VStack(alignment: .leading, spacing: 0) {
-        if session.tab == .fileports {
-          Text(
-            "Fileports are file descriptors exported as Mach send rights. The descriptor type identifies the underlying file, socket, or pipe."
-          ).font(.system(size: 11)).foregroundStyle(theme.secondary).padding(14)
-        }
-        if session.tab == .ports {
-          Text(
-            "Mach ports: \(session.row.details.ports.map(String.init) ?? "—") total. These are IPC rights, separate from TCP/UDP ports in Connections. macOS may allow a total while restricting enumeration."
-          )
-          .font(.system(size: 11)).foregroundStyle(theme.secondary).padding(14)
-        }
-        let section = session.sections[session.tab] ?? DiagnosticSection()
+      tablePage
+    }
+  }
+  private var tablePage: some View {
+    let section = session.sections[session.tab] ?? DiagnosticSection()
+    let count = section.records.filter {
+      query.isEmpty || $0.cells.values.contains { $0.localizedCaseInsensitiveContains(query) }
+    }.count
+    return DiagnosticPanel(theme: theme, padding: 0) {
+      VStack(spacing: 0) {
+        HStack(spacing: 10) {
+          Text("Entries").font(.system(size: 13, weight: .semibold))
+          Text(count.formatted()).font(.system(size: 10, weight: .medium))
+            .foregroundStyle(theme.secondary).padding(.horizontal, 6).padding(.vertical, 3)
+            .background(theme.subtle, in: RoundedRectangle(cornerRadius: 4))
+          Spacer(minLength: 0)
+          HStack(spacing: 7) {
+            Image(systemName: "magnifyingglass").foregroundStyle(theme.tertiary)
+            TextField("Filter entries", text: $query).textFieldStyle(.plain)
+              .accessibilityLabel("Filter entries")
+            if !query.isEmpty {
+              Button {
+                query = ""
+              } label: {
+                Image(systemName: "xmark.circle.fill")
+              }
+              .buttonStyle(.plain).foregroundStyle(theme.tertiary).help("Clear filter")
+            }
+          }.font(.system(size: 11)).padding(.horizontal, 10).frame(width: 170, height: 31)
+            .background(theme.subtle, in: RoundedRectangle(cornerRadius: 7))
+            .overlay(RoundedRectangle(cornerRadius: 7).stroke(theme.border, lineWidth: 1))
+          Button {
+            exportSection()
+          } label: {
+            Image(systemName: "square.and.arrow.up")
+          }
+          .buttonStyle(MonitorIconButton(theme: theme)).help("Export table as CSV")
+          .disabled(section.records.isEmpty)
+        }.padding(.horizontal, 16).frame(height: 58)
+        Rectangle().fill(theme.border).frame(height: 1)
         if section.records.isEmpty {
-          ContentUnavailableView(
+          diagnosticEmpty(
             session.collecting ? "Collecting details" : "No readable entries",
-            systemImage: session.tab.icon, description: Text(section.status)
-          )
-          .frame(maxWidth: .infinity, maxHeight: .infinity)
+            message: section.status, icon: session.tab.icon)
         } else {
           DiagnosticTable(
             section: section, query: query, key: session.tab.rawValue, theme: theme,
-            persistColumns: persistTableColumns)
+            persistColumns: persistTableColumns
+          )
+          .overlay {
+            if count == 0 {
+              diagnosticEmpty(
+                "No matching entries", message: "Try a different name, path or value.",
+                icon: "magnifyingglass"
+              )
+              .allowsHitTesting(false).padding(.top, 34)
+            }
+          }
         }
-        if let date = section.date {
-          Text(
-            "Snapshot \(date.formatted(date:.omitted,time:.standard)) · Right-click a column header to choose columns"
-          ).font(.system(size: 10)).foregroundStyle(theme.secondary).padding(10)
-        }
-      }
-    }
+        Rectangle().fill(theme.border).frame(height: 1)
+        VStack(alignment: .leading, spacing: 4) {
+          Text(section.status).lineLimit(2).help(section.status)
+          if let date = section.date {
+            Text(
+              "Snapshot \(date.formatted(date:.omitted,time:.standard)) · Right-click a header to choose columns"
+            )
+            .foregroundStyle(theme.tertiary)
+          }
+        }.font(.system(size: 10)).foregroundStyle(theme.secondary)
+          .frame(maxWidth: .infinity, alignment: .leading).padding(.horizontal, 16).padding(
+            .vertical, 10
+          )
+          .background(theme.subtle)
+      }.frame(maxHeight: .infinity)
+        .clipShape(RoundedRectangle(cornerRadius: 14))
+    }.padding(.horizontal, 22).padding(.bottom, 22)
+  }
+  private func diagnosticEmpty(_ title: String, message: String, icon: String) -> some View {
+    VStack(spacing: 10) {
+      Image(systemName: icon).font(.system(size: 28, weight: .light)).foregroundStyle(
+        theme.tertiary
+      )
+      .padding(.bottom, 4)
+      Text(title).font(.system(size: 16, weight: .semibold))
+      Text(message).font(.system(size: 12)).foregroundStyle(theme.secondary)
+        .multilineTextAlignment(.center).frame(maxWidth: 330)
+    }.padding(24).frame(maxWidth: .infinity, maxHeight: .infinity).background(theme.card)
   }
   private func panelTitle(_ title: String, icon: String) -> some View {
     HStack {
@@ -483,41 +531,81 @@ struct ProcessDiagnosticsView: View {
     return values
   }
   private var reports: some View {
-    VStack(alignment: .leading, spacing: 12) {
-      HStack {
-        Menu("Collect report") {
-          ForEach(ProcessReportKind.allCases) { kind in
-            Button(kind.rawValue) { session.collectReport(kind) }
+    DiagnosticPanel(theme: theme, padding: 0) {
+      VStack(alignment: .leading, spacing: 0) {
+        HStack(spacing: 10) {
+          Menu {
+            ForEach(ProcessReportKind.allCases) { kind in
+              Button(kind.rawValue) { session.collectReport(kind) }
+            }
+          } label: {
+            Label("Collect report", systemImage: "doc.badge.plus")
+              .font(.system(size: 12, weight: .medium)).padding(.horizontal, 10).frame(height: 32)
+              .background(theme.subtle, in: RoundedRectangle(cornerRadius: 7))
+          }.menuStyle(.borderlessButton).fixedSize().disabled(session.reporting || session.exited)
+          if session.reporting {
+            ProgressView().controlSize(.small)
+            Button("Cancel") { session.cancelReport() }
+              .buttonStyle(MonitorActionButton(theme: theme)).frame(width: 65)
           }
-        }.disabled(session.reporting || session.exited)
-        if session.reporting {
-          ProgressView().controlSize(.small)
-          Button("Cancel") { session.cancelReport() }
+          Spacer(minLength: 4)
+          Button {
+            copy(session.report?.text ?? "")
+          } label: {
+            Image(systemName: "doc.on.doc")
+          }
+          .buttonStyle(MonitorIconButton(theme: theme)).help("Copy report").disabled(
+            session.report == nil)
+          Button {
+            do {
+              try DiagnosticExport.save(
+                Data((session.report?.text ?? "").utf8),
+                name: "Process-\(session.id.pid)-report.txt")
+            } catch { exportError = error.localizedDescription }
+          } label: {
+            Image(systemName: "square.and.arrow.up")
+          }
+          .buttonStyle(MonitorIconButton(theme: theme)).help("Save report").disabled(
+            session.report == nil)
+        }.padding(.horizontal, 16).frame(height: 58)
+        Rectangle().fill(theme.border).frame(height: 1)
+        if let report = session.report {
+          HStack {
+            Text(report.title).font(.system(size: 12, weight: .semibold))
+            Spacer()
+            Text(report.status).font(.system(size: 10)).foregroundStyle(theme.secondary)
+          }.padding(16).background(theme.subtle)
+          DiagnosticReportText(text: report.text, theme: theme)
+          Rectangle().fill(theme.border).frame(height: 1)
+          Text("Collected \(report.date.formatted())").font(.system(size: 10))
+            .foregroundStyle(theme.tertiary).padding(12)
+        } else {
+          ScrollView {
+            VStack(alignment: .leading, spacing: 16) {
+              Text("Choose a report").font(.system(size: 15, weight: .semibold))
+              Text("Reports are collected on request and can be copied or saved.")
+                .font(.system(size: 12)).foregroundStyle(theme.secondary)
+              ForEach(ProcessReportKind.allCases) { kind in
+                Button {
+                  session.collectReport(kind)
+                } label: {
+                  HStack(spacing: 12) {
+                    Image(systemName: "doc.text").foregroundStyle(theme.blue).frame(width: 24)
+                    VStack(alignment: .leading, spacing: 4) {
+                      Text(kind.rawValue).font(.system(size: 12, weight: .medium))
+                      Text(kind.summary).font(.system(size: 11)).foregroundStyle(theme.secondary)
+                    }
+                    Spacer()
+                    Image(systemName: "arrow.right").foregroundStyle(theme.tertiary)
+                  }.padding(12).frame(maxWidth: .infinity, alignment: .leading)
+                }.buttonStyle(MonitorSegmentButton(theme: theme))
+                  .disabled(session.reporting || session.exited)
+              }
+            }.padding(20)
+          }
         }
-        Spacer()
-        Button("Copy") { copy(session.report?.text ?? "") }.disabled(session.report == nil)
-        Button("Save…") {
-          do {
-            try DiagnosticExport.save(
-              Data((session.report?.text ?? "").utf8), name: "Process-\(session.id.pid)-report.txt")
-          } catch { exportError = error.localizedDescription }
-        }.disabled(session.report == nil)
-      }
-      if let report = session.report {
-        Text("\(report.title) · \(report.status) · \(report.date.formatted())").font(
-          .system(size: 11)
-        ).foregroundStyle(theme.secondary)
-        DiagnosticReportText(text: report.text, theme: theme)
-      } else {
-        ContentUnavailableView(
-          "Process reports", systemImage: "doc.text.magnifyingglass",
-          description: Text(
-            "Collect a stack sample, open files, virtual memory, launch arguments, environment, or code-signing details. Reports are collected only when requested."
-          )
-        )
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-      }
-    }.padding(18)
+      }.frame(maxHeight: .infinity).clipShape(RoundedRectangle(cornerRadius: 14))
+    }.padding(.horizontal, 22).padding(.bottom, 22)
   }
   private func copy(_ text: String) {
     NSPasteboard.general.clearContents()
@@ -588,6 +676,7 @@ struct DiagnosticReportText: NSViewRepresentable {
     view.isEditable = false
     view.isSelectable = true
     view.isRichText = false
+    view.textContainerInset = NSSize(width: 16, height: 16)
     view.font = .monospacedSystemFont(ofSize: 12, weight: .regular)
     view.isHorizontallyResizable = true
     view.isVerticallyResizable = true

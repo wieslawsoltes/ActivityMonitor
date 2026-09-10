@@ -159,3 +159,17 @@ struct DiagnosticFieldGroup {
     return result
   }
 }
+
+extension ProcessReportKind {
+  var summary: String {
+    switch self {
+    case .sample: return "Thread stacks and a brief execution sample."
+    case .files: return "Open files, descriptors and network endpoints."
+    case .memory: return "Virtual memory regions and allocation details."
+    case .arguments: return "The arguments used to launch this process."
+    case .environment: return "Environment variables; may contain sensitive values."
+    case .signature: return "Signing identity, requirements and executable integrity."
+    case .entitlements: return "Capabilities declared by the executable."
+    }
+  }
+}

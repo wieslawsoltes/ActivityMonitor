@@ -24,9 +24,9 @@ struct DiagnosticTable: NSViewRepresentable {
     table.allowsColumnReordering = true
     table.allowsColumnResizing = true
     table.columnAutoresizingStyle = .noColumnAutoresizing
-    table.rowHeight = 28
+    table.rowHeight = 34
     table.intercellSpacing = NSSize(width: 12, height: 0)
-    table.usesAlternatingRowBackgroundColors = true
+    table.usesAlternatingRowBackgroundColors = false
     table.style = .plain
     table.copyRows = { [weak coordinator = context.coordinator] in coordinator?.copyRows() }
     let menu = NSMenu()
@@ -47,6 +47,8 @@ struct DiagnosticTable: NSViewRepresentable {
   func updateNSView(_ scroll: NSScrollView, context: Context) {
     let c = context.coordinator
     let table = c.table!
+    let themeChanged = c.theme.dark != theme.dark
+    c.theme = theme
     if c.key != key || c.columns != section.columns {
       c.key = key
       c.columns = section.columns
@@ -82,6 +84,8 @@ struct DiagnosticTable: NSViewRepresentable {
     }
     table.appearance = NSAppearance(named: theme.dark ? .darkAqua : .aqua)
     table.backgroundColor = NSColor(theme.card)
+    scroll.backgroundColor = NSColor(theme.card)
+    if themeChanged { table.reloadData() }
     if c.date != section.date || c.query != query || c.source != section.records {
       let selected = Set(
         table.selectedRowIndexes.compactMap { c.rows.indices.contains($0) ? c.rows[$0].id : nil })
@@ -97,6 +101,7 @@ struct DiagnosticTable: NSViewRepresentable {
   final class Coordinator: NSObject, NSTableViewDataSource, NSTableViewDelegate,
     NSMenuItemValidation
   {
+    var theme = MonitorTheme(dark: false)
     weak var table: NSTableView?
     var key = "", columns: [String] = [], source: [DiagnosticRecord] = [],
       rows: [DiagnosticRecord] = []
@@ -140,6 +145,12 @@ struct DiagnosticTable: NSViewRepresentable {
         ))
     }
     func numberOfRows(in tableView: NSTableView) -> Int { rows.count }
+    func tableView(_ tableView: NSTableView, rowViewForRow row: Int) -> NSTableRowView? {
+      let view = DiagnosticRowView()
+      view.theme = theme
+      view.alternate = row % 2 == 1
+      return view
+    }
     func tableView(_ tableView: NSTableView, viewFor tableColumn: NSTableColumn?, row: Int)
       -> NSView?
     {
@@ -149,7 +160,8 @@ struct DiagnosticTable: NSViewRepresentable {
         tableView.makeView(withIdentifier: identifier, owner: self) as? NSTextField
         ?? NSTextField(labelWithString: "")
       field.identifier = identifier
-      field.font = .systemFont(ofSize: 12)
+      field.font = .monospacedDigitSystemFont(ofSize: 12, weight: .regular)
+      field.textColor = NSColor(theme.text)
       field.lineBreakMode = .byTruncatingMiddle
       field.stringValue = rows[row].cells[column.title] ?? "—"
       field.toolTip = field.stringValue
@@ -205,4 +217,22 @@ private final class CopyingDiagnosticTable: NSTableView {
       super.keyDown(with: event)
     }
   }
+}
+
+private final class DiagnosticRowView: NSTableRowView {
+  var theme = MonitorTheme(dark: false)
+  var alternate = false
+  override func drawBackground(in dirtyRect: NSRect) {
+    NSColor(alternate ? theme.subtle : theme.card).setFill()
+    dirtyRect.fill()
+    NSColor(theme.separator).setFill()
+    NSRect(x: 0, y: bounds.height - 1, width: bounds.width, height: 1).fill()
+  }
+  override func drawSelection(in dirtyRect: NSRect) {
+    NSColor(theme.selected).setFill()
+    bounds.fill()
+    NSColor(theme.blue).setFill()
+    NSRect(x: 0, y: 0, width: 2, height: bounds.height).fill()
+  }
+  override var interiorBackgroundStyle: NSView.BackgroundStyle { .normal }
 }
