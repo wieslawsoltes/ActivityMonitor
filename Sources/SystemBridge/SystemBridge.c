@@ -21,8 +21,6 @@ int am_processes(AMProcess *out, int capacity) {
  if(!processes) return 0;
  if(sysctl(mib,4,processes,&size,NULL,0)!=0) {free(processes);return 0;}
  int count=(int)(size/sizeof(struct kinfo_proc)), n=0;
- mach_timebase_info_data_t timebase;
- mach_timebase_info(&timebase);
  for(int i=0;i<count && n<capacity;i++) {
   struct kinfo_proc *info=&processes[i];
   AMProcess p={0}; p.pid=info->kp_proc.p_pid; p.ppid=info->kp_eproc.e_ppid; p.uid=info->kp_eproc.e_ucred.cr_uid;p.translated=(info->kp_proc.p_flag & P_TRANSLATED)!=0;
@@ -32,8 +30,8 @@ int am_processes(AMProcess *out, int capacity) {
   struct proc_taskinfo task={0};
   if(proc_pidinfo(p.pid,PROC_PIDTASKINFO,0,&task,sizeof(task)) == sizeof(task)) {
    p.accessible=1; p.threads=task.pti_threadnum;
-   // proc_taskinfo uses Mach absolute ticks, not nanoseconds on Apple silicon.
-   p.cpu=(uint64_t)(((long double)task.pti_total_user+task.pti_total_system)*timebase.numer/timebase.denom);
+   // proc_taskinfo uses host ticks, including when this app runs under Rosetta.
+   p.cpu=am_host_nanoseconds(task.pti_total_user+task.pti_total_system);
    p.resident=task.pti_resident_size;
   }
   struct rusage_info_v4 r={0};
