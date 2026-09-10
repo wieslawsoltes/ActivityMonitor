@@ -87,6 +87,8 @@ struct ProcessDiagnosticsView: View {
   @Environment(\.colorScheme) private var scheme
   @AppStorage("appearance") private var appearance = "System"
   @State private var query = ""
+  @State private var showMappingChart = true
+  @State private var mappingChartPopover = false
   @State private var floating = false
   @State private var confirmStop = false
   @State private var exportError: String?
@@ -309,73 +311,99 @@ struct ProcessDiagnosticsView: View {
     let count = section.records.filter {
       query.isEmpty || $0.cells.values.contains { $0.localizedCaseInsensitiveContains(query) }
     }.count
-    return DiagnosticPanel(theme: theme, padding: 0) {
-      VStack(spacing: 0) {
-        HStack(spacing: 10) {
-          Text("Entries").font(.system(size: 13, weight: .semibold))
-          Text(count.formatted()).font(.system(size: 10, weight: .medium))
-            .foregroundStyle(theme.secondary).padding(.horizontal, 6).padding(.vertical, 3)
-            .background(theme.subtle, in: RoundedRectangle(cornerRadius: 4))
-          Spacer(minLength: 0)
-          HStack(spacing: 7) {
-            Image(systemName: "magnifyingglass").foregroundStyle(theme.tertiary)
-            TextField("Filter entries", text: $query).textFieldStyle(.plain)
-              .accessibilityLabel("Filter entries")
-            if !query.isEmpty {
-              Button {
-                query = ""
-              } label: {
-                Image(systemName: "xmark.circle.fill")
+    return GeometryReader { geometry in
+      let hasChart = session.tab == .maps || session.tab == .images
+      let inlineChart = geometry.size.height >= 440
+      DiagnosticPanel(theme: theme, padding: 0) {
+        VStack(spacing: 0) {
+          HStack(spacing: 10) {
+            Text("Entries").font(.system(size: 13, weight: .semibold))
+            Text(count.formatted()).font(.system(size: 10, weight: .medium))
+              .foregroundStyle(theme.secondary).padding(.horizontal, 6).padding(.vertical, 3)
+              .background(theme.subtle, in: RoundedRectangle(cornerRadius: 4))
+            Spacer(minLength: 0)
+            HStack(spacing: 7) {
+              Image(systemName: "magnifyingglass").foregroundStyle(theme.tertiary)
+              TextField("Filter entries", text: $query).textFieldStyle(.plain)
+                .accessibilityLabel("Filter entries")
+              if !query.isEmpty {
+                Button {
+                  query = ""
+                } label: {
+                  Image(systemName: "xmark.circle.fill")
+                }
+                .buttonStyle(.plain).foregroundStyle(theme.tertiary).help("Clear filter")
               }
-              .buttonStyle(.plain).foregroundStyle(theme.tertiary).help("Clear filter")
+            }.font(.system(size: 11)).padding(.horizontal, 10).frame(width: 170, height: 31)
+              .background(theme.subtle, in: RoundedRectangle(cornerRadius: 7))
+              .overlay(RoundedRectangle(cornerRadius: 7).stroke(theme.border, lineWidth: 1))
+            if hasChart {
+              Button {
+                if inlineChart { showMappingChart.toggle() } else { mappingChartPopover.toggle() }
+              } label: {
+                Image(systemName: "chart.bar.xaxis")
+              }
+              .buttonStyle(MonitorIconButton(theme: theme))
+              .help(inlineChart && showMappingChart ? "Hide visualization" : "Show visualization")
+              .popover(isPresented: $mappingChartPopover) {
+                MappingVisualization(
+                  section: section, query: query, images: session.tab == .images, theme: theme
+                )
+                .frame(width: 640, height: 350).preferredColorScheme(theme.dark ? .dark : .light)
+              }
             }
-          }.font(.system(size: 11)).padding(.horizontal, 10).frame(width: 170, height: 31)
-            .background(theme.subtle, in: RoundedRectangle(cornerRadius: 7))
-            .overlay(RoundedRectangle(cornerRadius: 7).stroke(theme.border, lineWidth: 1))
-          Button {
-            exportSection()
-          } label: {
-            Image(systemName: "square.and.arrow.up")
-          }
-          .buttonStyle(MonitorIconButton(theme: theme)).help("Export table as CSV")
-          .disabled(section.records.isEmpty)
-        }.padding(.horizontal, 16).frame(height: 58)
-        Rectangle().fill(theme.border).frame(height: 1)
-        if section.records.isEmpty {
-          diagnosticEmpty(
-            session.collecting ? "Collecting details" : "No readable entries",
-            message: section.status, icon: session.tab.icon)
-        } else {
-          DiagnosticTable(
-            section: section, query: query, key: session.tab.rawValue, theme: theme,
-            persistColumns: persistTableColumns
-          )
-          .overlay {
-            if count == 0 {
-              diagnosticEmpty(
-                "No matching entries", message: "Try a different name, path or value.",
-                icon: "magnifyingglass"
-              )
-              .allowsHitTesting(false).padding(.top, 34)
+            Button {
+              exportSection()
+            } label: {
+              Image(systemName: "square.and.arrow.up")
             }
-          }
-        }
-        Rectangle().fill(theme.border).frame(height: 1)
-        VStack(alignment: .leading, spacing: 4) {
-          Text(section.status).lineLimit(2).help(section.status)
-          if let date = section.date {
-            Text(
-              "Snapshot \(date.formatted(date:.omitted,time:.standard)) · Right-click a header to choose columns"
+            .buttonStyle(MonitorIconButton(theme: theme)).help("Export table as CSV")
+            .disabled(section.records.isEmpty)
+          }.padding(.horizontal, 16).frame(height: 58)
+          Rectangle().fill(theme.border).frame(height: 1)
+          if hasChart && inlineChart && showMappingChart {
+            MappingVisualization(
+              section: section, query: query, images: session.tab == .images, theme: theme
             )
-            .foregroundStyle(theme.tertiary)
+            .id(session.tab).frame(height: min(250, geometry.size.height * 0.43))
+            Rectangle().fill(theme.border).frame(height: 1)
           }
-        }.font(.system(size: 10)).foregroundStyle(theme.secondary)
-          .frame(maxWidth: .infinity, alignment: .leading).padding(.horizontal, 16).padding(
-            .vertical, 10
-          )
-          .background(theme.subtle)
-      }.frame(maxHeight: .infinity)
-        .clipShape(RoundedRectangle(cornerRadius: 14))
+          if section.records.isEmpty {
+            diagnosticEmpty(
+              session.collecting ? "Collecting details" : "No readable entries",
+              message: section.status, icon: session.tab.icon)
+          } else {
+            DiagnosticTable(
+              section: section, query: query, key: session.tab.rawValue, theme: theme,
+              persistColumns: persistTableColumns
+            )
+            .overlay {
+              if count == 0 {
+                diagnosticEmpty(
+                  "No matching entries", message: "Try a different name, path or value.",
+                  icon: "magnifyingglass"
+                )
+                .allowsHitTesting(false).padding(.top, 34)
+              }
+            }
+          }
+          Rectangle().fill(theme.border).frame(height: 1)
+          VStack(alignment: .leading, spacing: 4) {
+            Text(section.status).lineLimit(2).help(section.status)
+            if let date = section.date {
+              Text(
+                "Snapshot \(date.formatted(date:.omitted,time:.standard)) · Right-click a header to choose columns"
+              )
+              .foregroundStyle(theme.tertiary)
+            }
+          }.font(.system(size: 10)).foregroundStyle(theme.secondary)
+            .frame(maxWidth: .infinity, alignment: .leading).padding(.horizontal, 16).padding(
+              .vertical, 10
+            )
+            .background(theme.subtle)
+        }.frame(maxHeight: .infinity)
+          .clipShape(RoundedRectangle(cornerRadius: 14))
+      }
     }.padding(.horizontal, 22).padding(.bottom, 22)
   }
   private func diagnosticEmpty(_ title: String, message: String, icon: String) -> some View {
