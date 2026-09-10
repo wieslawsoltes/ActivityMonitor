@@ -49,13 +49,17 @@ Choose light, dark or system appearance. The process inspector sits beside wide 
 
 ## Fits your workspace
 
-Keep the familiar three-panel overview at the default size, use a compact window alongside other apps, or expand for larger histories and more process detail. Smaller windows prioritize the chart and key columns, with expandable breakdowns and access to the full column set. Hover over a chart to inspect a sample. With macOS **Keyboard navigation** enabled, use Tab to reach a chart and the arrow keys to inspect its history.
+Keep the familiar three-panel overview at the default size, use a compact window alongside other apps, or expand for larger histories and more process detail. Smaller and shorter windows use compact charts, tighter summary panels and streamlined controls to leave more room for processes. Narrow windows offer expandable breakdowns and access to the full column set. Hover over a chart to inspect a sample. With macOS **Keyboard navigation** enabled, use Tab to reach a chart and the arrow keys to inspect its history.
 
 The menu-bar monitor brings all six views into a compact popover. Change the history range, select a GPU, pause monitoring, or open a process in the main window. Both surfaces share the same live session.
 
+| Compact overview · Light | Compact overview · Dark |
+| :---: | :---: |
+| ![Compact overview in light appearance](docs/screenshots/compact-overview/cpu-light.jpg) | ![Compact overview in dark appearance](docs/screenshots/compact-overview/cpu-dark.jpg) |
+
 | Compact workspace | Menu bar · Light | Menu bar · Dark |
 | :---: | :---: | :---: |
-| ![Compact Activity Monitor](docs/screenshots/adaptive/compact.png) | ![Menu-bar GPU monitoring in light appearance](docs/screenshots/adaptive/tray-light.jpg) | ![Menu-bar GPU monitoring in dark appearance](docs/screenshots/adaptive/tray-dark.jpg) |
+| ![Compact Activity Monitor](docs/screenshots/compact-overview/narrow-dark.jpg) | ![Menu-bar CPU monitoring in light appearance](docs/screenshots/compact-overview/tray-light.jpg) | ![Menu-bar GPU monitoring in dark appearance](docs/screenshots/compact-overview/tray-dark.jpg) |
 
 ## A closer look at graphics
 

@@ -204,14 +204,15 @@ struct ContentView: View {
       if !layout.denseOverview {
         sectionHeading.padding(.top, 23).padding(.bottom, 20)
       } else {
-        VStack(alignment: .leading, spacing: 4) {
-          HStack(spacing: 8) {
+        HStack(spacing: 8) {
+          if metric == .gpu {
+            GPUDevicePicker(theme: theme)
+          } else {
             Text(metric.rawValue + " activity")
               .font(.system(size: 18, weight: .semibold)).tracking(-0.4)
-            Spacer(minLength: 4)
-            HistoryRangePicker(range: $range, theme: theme)
           }
-          if metric == .gpu { GPUDevicePicker(theme: theme) }
+          Spacer(minLength: 4)
+          HistoryRangePicker(range: $range, theme: theme)
         }.padding(.vertical, 6)
       }
       MonitorOverview(
