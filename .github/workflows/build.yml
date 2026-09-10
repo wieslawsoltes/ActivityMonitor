@@ -2,6 +2,10 @@ name: Build and test
 on:
   workflow_call:
     inputs:
+      include_intel:
+        description: 'Run native Intel tests in addition to Apple silicon'
+        type: boolean
+        default: false
       version:
         type: string
         default: '1.6.1'
@@ -13,7 +17,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        runner: [macos-latest, macos-26-intel]
+        runner: ${{ inputs.include_intel && fromJSON('["macos-latest","macos-26-intel"]') || fromJSON('["macos-latest"]') }}
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 20
     steps:
