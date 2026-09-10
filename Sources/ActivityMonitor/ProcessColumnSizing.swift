@@ -19,6 +19,19 @@ struct ProcessColumnWidths {
   mutating func set(_ key: String, metric: Metric, width: CGFloat?) {
     values[metric.rawValue, default: [:]][key] = width.map { Double(Self.clamp($0, key: key)) }
   }
+  mutating func resize(
+    _ key: String, metric: Metric, columns: [ProcessColumn], viewport: CGFloat, to width: CGFloat
+  ) {
+    // A divider drag must move that divider, not compensate by moving the name
+    // column's opposite edge. Freeze its current automatic width on first resize.
+    if key != "name", self.width("name", metric: metric) == nil {
+      let name = ProcessColumnLayout(
+        viewport: viewport, metric: metric, columns: columns, saved: self
+      ).name
+      set("name", metric: metric, width: name)
+    }
+    set(key, metric: metric, width: width)
+  }
   mutating func reset(_ metric: Metric) { values[metric.rawValue] = nil }
 }
 
@@ -41,7 +54,8 @@ struct ProcessColumnLayout: Equatable {
         )
       })
     let metrics = widths.values.reduce(0, +)
-    name = saved.width("name", metric: metric) ?? max(140, viewport - metrics)
+    name =
+      saved.width("name", metric: metric) ?? max(viewport >= 900 ? 300 : 140, viewport - metrics)
     total = max(viewport, name + metrics)
   }
 

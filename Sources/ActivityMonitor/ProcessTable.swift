@@ -437,14 +437,15 @@ struct MonitorProcessTable: View {
     columnOrder = value.json
   }
   func resizeColumn(_ key: String, width: CGFloat, finished: Bool) {
-    let width = ProcessColumnWidths.clamp(width, key: key)
+    var value = widthPreferences
+    value.resize(
+      key, metric: metric, columns: columns, viewport: viewportWidth ?? availableWidth, to: width)
     if finished {
-      var value = ProcessColumnWidths(columnWidths)
-      value.set(key, metric: metric, width: width)
       columnWidths = value.json
-      draftWidths[key] = nil
+      draftWidths = [:]
     } else {
-      draftWidths[key] = width
+      if let name = value.width("name", metric: metric) { draftWidths["name"] = name }
+      draftWidths[key] = value.width(key, metric: metric)
     }
   }
   func resetColumnWidth(_ key: String) {

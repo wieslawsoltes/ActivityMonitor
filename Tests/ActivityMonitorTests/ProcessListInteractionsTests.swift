@@ -43,6 +43,20 @@ final class ProcessListInteractionsTests: XCTestCase {
     XCTAssertEqual(changed.width("pid"), layout.width("pid"))
     XCTAssertEqual(changed.total, 1377)
   }
+  func testDividerResizeKeepsNeighborWidthsAndMovesTheDivider() {
+    let columns = ProcessColumns.defaults(.cpu)
+    var saved = ProcessColumnWidths()
+    let before = ProcessColumnLayout(viewport: 1377, metric: .cpu, columns: columns, saved: saved)
+    saved.resize(
+      "primary", metric: .cpu, columns: columns, viewport: 1377, to: before.width("primary") + 70)
+    let after = ProcessColumnLayout(viewport: 1377, metric: .cpu, columns: columns, saved: saved)
+    XCTAssertEqual(after.name, before.name)
+    XCTAssertEqual(after.offset("time"), before.offset("time") + 70)
+    XCTAssertEqual(after.total, before.total + 70)
+    let all = ProcessColumnLayout(
+      viewport: 1377, metric: .cpu, columns: ProcessColumns.available(.cpu), saved: .init())
+    XCTAssertEqual(all.name, 300)
+  }
   func testReorderingIncludesNameAndSurvivesHiddenColumnsAndRelaunch() {
     var order = ProcessColumnOrder()
     order.move("name", to: "threads", metric: .cpu)
