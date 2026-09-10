@@ -137,6 +137,34 @@ final class PerformanceTests: XCTestCase {
         .environmentObject(monitor), size: CGSize(width: 1080, height: 760))
     }
   }
+  @MainActor func testCPUDetailPerformance() throws {
+    try enabled()
+    let end = PerformanceFixture.end
+    let readings = (0..<4096).map {
+      CPUReading(id: String($0), title: "Thread \($0)", user: 20, system: 10)
+    }
+    var history = CPUHistoryStore()
+    for i in 0..<40 { history.append(readings, at: end.addingTimeInterval(Double(i))) }
+    benchmark("cpu.history.4096") {
+      history.append(
+        readings, at: (history.series.first?.points.last?.date ?? end).addingTimeInterval(1))
+      XCTAssertLessThanOrEqual(
+        history.series.reduce(0) { $0 + $1.points.count }, CPUHistoryStore.pointBudget)
+    }
+    let series = (0..<12).map { index in
+      CPUUsageSeries(
+        id: String(index), title: "CPU \(index)", detail: "Performance",
+        points: (0..<901).map {
+          CPUUsagePoint(
+            date: end.addingTimeInterval(Double($0 - 900)), user: Double($0 % 60), system: 10)
+        })
+    }
+    benchmark("cpu.grid.12.15min", iterations: 3) {
+      render(
+        CPUChartBrowser(series: series, range: 15, end: end, theme: .init(dark: true)),
+        size: CGSize(width: 960, height: 400))
+    }
+  }
   @MainActor func testStartupAndSupplementarySurfaces() throws {
     try enabled()
     benchmark("startup.models") {

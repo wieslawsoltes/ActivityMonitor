@@ -56,6 +56,12 @@
     },
     "diagnostics.table.2500": {
       "median_ms": 150
+    },
+    "cpu.history.4096": {
+      "median_ms": 30
+    },
+    "cpu.grid.12.15min": {
+      "median_ms": 150
     }
   },
   "memory_growth_bytes": {
