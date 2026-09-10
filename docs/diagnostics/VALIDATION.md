@@ -5,7 +5,7 @@ Validated on 10 September 2026, on an Apple silicon Mac with 11 logical processo
 ## Automated checks
 
 - `swift test`: 103 tests, zero failures; five opt-in performance tests skipped in the normal run.
-- Release performance run: all 17 measurement budgets and memory gates passed. The 15-minute diagnostic workspace measured 93.24 ms median / 104.35 ms p95; the 2,500-row diagnostic table measured 51.46 ms median / 55.63 ms p95.
+- Release performance run: all 17 measurement budgets and memory gates passed. The 15-minute diagnostic workspace measured 61.43 ms median / 65.12 ms p95; the 2,500-row diagnostic table measured 38.38 ms median / 40.79 ms p95.
 - Performance gate tests: six passed. Packaging/notarization failure-path tests: six passed.
 - Universal release build: arm64 and x86_64 compiled successfully.
 - App signature, DMG integrity, ZIP contents, version, Applications link and SHA-256 checksums verified for the local 1.6.0 candidate. It is ad-hoc signed, not notarized or published.
@@ -19,6 +19,14 @@ Validated on 10 September 2026, on an Apple silicon Mac with 11 logical processo
 - Pinned a process, opened its popover, changed CPU to Memory, paused/resumed, and reopened the tool window. Closing the window retained the pinned session and its report.
 - Verified light/dark appearances and captured the process workspace and host CPU overview. Automated rendering covers all 15 pages in both appearances at two sizes.
 - Host CPU displayed values above 100% with an 1100% axis maximum on the local 11-logical-processor machine. A 16-processor fixture reaches a 1600% maximum.
+
+## Design refinement
+
+All 15 pages now share the main monitor’s theme, rounded panels, typography, history controls and hover feedback. Overview groups all collected fields without dropping unknown counters; activity pages show charts and process counters; the seven native tables share an entry/filter/export toolbar, viewport scrollbars and clear empty states. Reports provide a chooser and a separate reading surface.
+
+After refinement, the full 103-test suite passed. The final focused rendering suite passed all pages in both appearances at 760 × 500 and 1060 × 740, including explicit checks that all seven tables are present. Native checks confirmed arrow-key sidebar navigation, a filtered-empty table, readable long paths, a completed memory report and both appearances. Updated screenshots are in the [user guide](README.md#appearances).
+
+The universal 1.6.0 local candidate was rebuilt and its DMG/ZIP contents verified after these changes.
 
 ## Limits
 

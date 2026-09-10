@@ -2,6 +2,8 @@
 
 Open **Process diagnostics…** from a process’s context menu or inspector. Use **Open in tool window** to keep it beside your main monitor. The window’s overlapping-rectangles button makes it float above other windows.
 
+The workspace uses the same surfaces, typography, history controls and selection accents as the main monitor. Overview groups identity, access, CPU, memory and resource details. Activity pages pair a chart with process counters; table pages keep filters and exports above the list. Long paths wrap within their panels.
+
 The workspace provides:
 
 - **Overview:** executable and working directories, start time, identity and credentials, scheduling, virtual and resident memory, faults, syscalls, messages, wake-ups, resource counters, and parent/child navigation.
@@ -16,6 +18,15 @@ The workspace provides:
 - **Reports:** stack sampling, complete `lsof` output, `vmmap`, launch arguments, environment, code signature, and entitlements. Reports are collected only on request.
 
 Tables support column resizing, double-click fitting, drag reordering, sorting, header-menu visibility, multiple selection, keyboard navigation, ⌘C, and Finder reveal for file paths. Column layouts are remembered separately per diagnostic table. Filter and export tables as CSV, save reports as text, or export the collected process snapshot, history and reports as JSON.
+
+## Appearances
+
+| View | Light | Dark |
+| :--- | :---: | :---: |
+| Overview | ![Overview light](../screenshots/diagnostics/overview-light.jpg) | ![Overview dark](../screenshots/diagnostics/overview-dark.jpg) |
+| CPU activity | ![CPU light](../screenshots/diagnostics/cpu-light.jpg) | ![CPU dark](../screenshots/diagnostics/cpu-dark.jpg) |
+| Threads | ![Threads light](../screenshots/diagnostics/threads-light.jpg) | ![Threads dark](../screenshots/diagnostics/threads-dark.jpg) |
+| Reports | ![Report result light](../screenshots/diagnostics/reports-light.jpg) | ![Report chooser dark](../screenshots/diagnostics/reports-dark.jpg) |
 
 ## Menu bar pins
 
