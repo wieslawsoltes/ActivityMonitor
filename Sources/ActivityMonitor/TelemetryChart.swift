@@ -69,7 +69,6 @@ struct TelemetryChart: View {
   let end: Date
   let theme: MonitorTheme
   @State private var selectedDate: Date?
-  @FocusState private var focused: Bool
   private var start: Date { end.addingTimeInterval(Double(-range * 60)) }
   private var visible: [TelemetrySample] { samples.filter { $0.date >= start } }
   private var domain: ClosedRange<Double> { TelemetryData.domain(visible, metric: metric) }
@@ -167,8 +166,10 @@ struct TelemetryChart: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
       }
     }
-    .focusable().focused($focused).focusEffectDisabled()
-    .overlay(RoundedRectangle(cornerRadius: 4).stroke(focused ? theme.blue : .clear, lineWidth: 1))
+    // Inspection is an alternative to pointer interaction, not an always-active editor.
+    // Respect macOS Keyboard navigation and let the system render intentional focus.
+    .contentShape(RoundedRectangle(cornerRadius: 4))
+    .focusable(interactions: .activate)
     .onKeyPress(.leftArrow) {
       step(-1)
       return .handled
@@ -189,7 +190,7 @@ struct TelemetryChart: View {
     .accessibilityHint(inspectionHint)
   }
   private var inspectionHint: String {
-    "Hover to inspect. Focus and use left or right arrow keys to inspect samples."
+    "Hover to inspect. With macOS Keyboard navigation enabled, Tab to the chart and use left or right arrow keys to inspect samples."
       + (metric == .cpu ? " " + CPUAccounting.systemHelp : "")
   }
   private var latestValue: String {

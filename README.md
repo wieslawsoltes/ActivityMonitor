@@ -49,7 +49,7 @@ Choose light, dark or system appearance. The process inspector sits beside wide 
 
 ## Fits your workspace
 
-Keep the familiar three-panel overview at the default size, use a compact window alongside other apps, or expand for larger histories and more process detail. Smaller windows prioritize the chart and key columns, with expandable breakdowns and access to the full column set. Hover over a chart to inspect a sample, or focus it and use the arrow keys.
+Keep the familiar three-panel overview at the default size, use a compact window alongside other apps, or expand for larger histories and more process detail. Smaller windows prioritize the chart and key columns, with expandable breakdowns and access to the full column set. Hover over a chart to inspect a sample. With macOS **Keyboard navigation** enabled, use Tab to reach a chart and the arrow keys to inspect its history.
 
 The menu-bar monitor brings all six views into a compact popover. Change the history range, select a GPU, pause monitoring, or open a process in the main window. Both surfaces share the same live session.
 
