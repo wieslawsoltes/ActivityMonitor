@@ -4,8 +4,8 @@ Validated on 10 September 2026, on an Apple silicon Mac with 11 logical processo
 
 ## Automated checks
 
-- `swift test`: 110 tests, zero failures; six opt-in performance tests skipped in the normal run.
-- Release performance run: all 19 measurement budgets and memory gates passed. The 15-minute diagnostic workspace measured 66.48 ms median / 67.96 ms p95; the 2,500-row diagnostic table measured 34.39 ms median / 36.47 ms p95.
+- `swift test`: 111 tests, zero failures; six opt-in performance tests skipped in the normal run.
+- Release performance run: all 20 measurement budgets and memory gates passed. The 15-minute diagnostic workspace measured 72.09 ms median / 76.00 ms p95; the 2,500-row diagnostic table measured 35.40 ms median / 37.37 ms p95.
 - Performance gate tests: six passed. Packaging/notarization failure-path tests: six passed.
 - Universal release build: arm64 and x86_64 compiled successfully.
 - App signature, DMG integrity, ZIP contents, version, Applications link and SHA-256 checksums verified for the local 1.6.0 candidate. It is ad-hoc signed, not notarized or published.
@@ -31,9 +31,10 @@ The universal 1.6.0 local candidate was rebuilt and its DMG/ZIP contents verifie
 ## Individual CPU charts
 
 - Live host topology reports 11 physical/logical processors: five performance and six efficiency cores. Explicit IODeviceTree logical IDs match processor slot IDs; no classification is inferred from order.
-- Six CPU-detail tests cover independent tick baselines, nice time, counter wrap, missing/reappearing cores, thread resets and churn, opt-in/pause behavior, history budgets, live Mach buffer bounds and narrow/wide rendering in both themes.
-- Native checks exercised logical processor selection and inspection, thread pagination, filtering the live VM’s VCPU workers, separate user/system rates, and pause/resume in a process menu-bar pin. One combined chart remains the launch default.
-- Histories are capped at 131,072 points per grid/session. Release performance gates cover appending 4,096 thread histories and rendering twelve charts with fifteen minutes of data (1.77 ms and 41.31 ms median respectively).
+- Seven CPU-detail tests cover independent tick baselines, nice time, counter wrap, missing/reappearing cores, thread resets and churn, opt-in/pause behavior, history budgets, live Mach buffer bounds and narrow/wide rendering in both themes.
+- Native checks exercised logical processor selection and inspection, automatic thread grid fitting, filtering the live VM’s VCPU workers, separate user/system rates, and pause/resume in a process menu-bar pin. One combined chart remains the launch default.
+- Histories are capped at 131,072 points per grid/session. Release performance gates cover appending 4,096 thread histories and rendering twelve and sixty-four charts with fifteen minutes of data (1.87 ms, 30.52 ms and 89.53 ms median respectively).
+- Adaptive layout fixtures fit 1, 11, 16, 64, 67 and 128 charts into representative viewport sizes, enlarge filtered results, and retain a legible scrolling fallback for 4,096 threads. Native validation showed every live VM thread together and all eleven host processors inside the compact system popover. Optional Paged charts retained twelve tiles and working next/previous navigation.
 - The full suite passed, followed by the focused CPU-detail suite and all release performance gates after the final grid layout refinement. The universal 1.6.0 candidate and DMG/ZIP were rebuilt and verified again.
 
 ## Limits

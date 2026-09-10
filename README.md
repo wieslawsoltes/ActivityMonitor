@@ -53,7 +53,7 @@ Keep several process monitors open as independent tool windows, float one above 
 
 ## See every core
 
-Keep one combined CPU chart or switch to individual logical processors. See performance and efficiency core counts where macOS exposes them, compare utilization and inspect each history. Process workspaces also offer individual thread charts.
+Keep one combined CPU chart or switch to individual logical processors. Choose **Fit all charts** to adapt the grid to your window or **Paged charts** for twelve larger charts at a time. See performance and efficiency core counts where macOS exposes them, compare utilization and inspect each history. Process workspaces also offer individual thread charts.
 
 | Logical processors · Light | Logical processors · Dark |
 | :---: | :---: |
