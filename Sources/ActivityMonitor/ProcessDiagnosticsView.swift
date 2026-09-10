@@ -441,16 +441,34 @@ struct ProcessDiagnosticsView: View {
                 .font(.system(size: 34, weight: .medium)).tracking(-1).monospacedDigit()
             }
             Spacer()
-            Circle().fill(theme.blue).frame(width: 6, height: 6).padding(.top, 5)
-            Text(metric == .energy ? "Workload" : "Process").font(.system(size: 10))
-              .foregroundStyle(theme.secondary).padding(.top, 2)
+            if metric == .cpu || metric == .energy {
+              CPUChartModePicker(individual: $session.showsThreadCPU, threads: true, theme: theme)
+            } else {
+              Circle().fill(theme.blue).frame(width: 6, height: 6).padding(.top, 5)
+              Text("Process").font(.system(size: 10)).foregroundStyle(theme.secondary).padding(
+                .top, 2)
+            }
           }
         }
-        TelemetryChart(
-          samples: ProcessActivityPresentation.samples(session.histories, metric: metric),
-          metric: metric, range: session.range, end: session.histories.last?.date ?? Date(),
-          theme: theme, perProcess: true
-        ).frame(height: 155)
+        if (metric == .cpu || metric == .energy) && session.showsThreadCPU {
+          CPUChartBrowser(
+            series: session.threadCPU, range: session.range,
+            end: session.threadCPU.flatMap { $0.points.last.map { [$0.date] } ?? [] }.max()
+              ?? Date(),
+            theme: theme, threads: true, status: session.threadCPUStatus
+          )
+          .frame(height: 300)
+          Text(
+            "Individual thread CPU · Refreshed at most every 2 seconds · History begins when enabled"
+          )
+          .font(.system(size: 10)).foregroundStyle(theme.tertiary)
+        } else {
+          TelemetryChart(
+            samples: ProcessActivityPresentation.samples(session.histories, metric: metric),
+            metric: metric, range: session.range, end: session.histories.last?.date ?? Date(),
+            theme: theme, perProcess: true
+          ).frame(height: 155)
+        }
         Text(ProcessActivityPresentation.note(metric)).font(.system(size: 10))
           .foregroundStyle(theme.secondary).fixedSize(horizontal: false, vertical: true)
       }
@@ -649,11 +667,23 @@ struct ProcessPinView: View {
       Text(ProcessActivityPresentation.latest(session, metric: session.pinMetric)).font(
         .system(size: 27, weight: .medium)
       ).monospacedDigit()
-      TelemetryChart(
-        samples: ProcessActivityPresentation.samples(session.histories, metric: session.pinMetric),
-        metric: session.pinMetric, range: 1, end: session.histories.last?.date ?? Date(),
-        theme: theme, perProcess: true
-      ).frame(height: 115)
+      if session.pinMetric == .cpu || session.pinMetric == .energy {
+        CPUChartModePicker(individual: $session.showsThreadCPU, threads: true, theme: theme)
+      }
+      if (session.pinMetric == .cpu || session.pinMetric == .energy) && session.showsThreadCPU {
+        CPUChartBrowser(
+          series: session.threadCPU, range: 1,
+          end: session.threadCPU.first?.points.last?.date ?? Date(), theme: theme, threads: true,
+          status: session.threadCPUStatus
+        ).frame(height: 245)
+      } else {
+        TelemetryChart(
+          samples: ProcessActivityPresentation.samples(
+            session.histories, metric: session.pinMetric),
+          metric: session.pinMetric, range: 1, end: session.histories.last?.date ?? Date(),
+          theme: theme, perProcess: true
+        ).frame(height: 115)
+      }
       HStack {
         Button(session.paused ? "Resume" : "Pause") { session.paused.toggle() }.disabled(
           session.exited)

@@ -85,6 +85,7 @@ struct TelemetryChart: View {
   let end: Date
   let theme: MonitorTheme
   let perProcess: Bool
+  let cpuLabel: String?
   @State private var selectedDate: Date?
   private var start: Date { end.addingTimeInterval(Double(-range * 60)) }
   private let traces: [TelemetryTrace]
@@ -92,7 +93,7 @@ struct TelemetryChart: View {
   private let domain: ClosedRange<Double>
   init(
     samples: [TelemetrySample], metric: Metric, range: Int, end: Date, theme: MonitorTheme,
-    perProcess: Bool = false
+    perProcess: Bool = false, cpuMaximum: Double? = nil, cpuLabel: String? = nil
   ) {
     self.samples = samples
     self.metric = metric
@@ -100,11 +101,14 @@ struct TelemetryChart: View {
     self.end = end
     self.theme = theme
     self.perProcess = perProcess
+    self.cpuLabel = cpuLabel
     let start = end.addingTimeInterval(Double(-range * 60))
     let visible = samples.filter { $0.date >= start && $0.date <= end }
     self.visible = visible
     self.traces = TelemetryTrace.make(visible)
-    if perProcess {
+    if let cpuMaximum, metric == .cpu {
+      self.domain = 0...max(100, cpuMaximum)
+    } else if perProcess {
       let maximum = max(1, (visible.map { abs($0.value) }.max() ?? 1) * 1.15)
       self.domain = (metric == .disk || metric == .network ? -maximum : 0)...maximum
     } else {
@@ -124,7 +128,8 @@ struct TelemetryChart: View {
   }
   private func label(_ sample: TelemetrySample) -> String {
     switch metric {
-    case .cpu: return sample.series == 0 ? (perProcess ? "Process" : "Total") : "System"
+    case .cpu:
+      return sample.series == 0 ? (cpuLabel ?? (perProcess ? "Process" : "Total")) : "System"
     case .memory: return perProcess ? "Memory" : "Pressure"
     case .energy: return "CPU workload"
     case .gpu: return perProcess ? "Process" : "Device"

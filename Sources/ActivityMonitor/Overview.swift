@@ -10,11 +10,45 @@ struct MonitorOverview: View {
   var width: CGFloat = 1068
   var expanded = false
   var condensed = false
+  @State var individualCPU = false
+  @State private var processorDetails = false
   private var dense: Bool { condensed || width < 1068 }
   var body: some View {
     if metric == .gpu {
       GPUOverview(
         range: range, theme: theme, width: width, expanded: expanded, condensed: condensed)
+    } else if metric == .cpu && individualCPU {
+      VStack(spacing: dense ? 10 : 14) {
+        DesignCard(theme: theme, padding: dense ? 12 : 19) {
+          VStack(alignment: .leading, spacing: 12) {
+            HStack(alignment: .top) {
+              VStack(alignment: .leading, spacing: 4) {
+                Text("CPU by logical processor").font(.system(size: 13, weight: .semibold))
+                Text(monitor.cpuTopology.summary).font(.system(size: 10)).foregroundStyle(
+                  theme.secondary)
+              }
+              Spacer(minLength: 4)
+              CPUChartModePicker(individual: $individualCPU, theme: theme)
+            }
+            CPUChartBrowser(
+              series: monitor.cpuCores, range: range,
+              end: monitor.lastUpdate ?? Date(), theme: theme, status: monitor.cpuCoreStatus)
+            Text("Each chart: 0–100% · Select a processor to inspect its history")
+              .font(.system(size: 10)).foregroundStyle(theme.tertiary)
+          }
+        }.frame(height: dense ? 330 : 350)
+        DisclosureGroup("Breakdown & device details", isExpanded: $processorDetails) {
+          if width >= 668 {
+            HStack(spacing: 14) {
+              DesignCard(theme: theme, padding: dense ? 12 : 20) { middleCard }
+              DesignCard(theme: theme, padding: dense ? 12 : 20) { lastCard }
+            }.frame(height: dense ? 148 : 213)
+          } else {
+            DesignCard(theme: theme, padding: 12) { middleCard }.frame(height: 148)
+            DesignCard(theme: theme, padding: 12) { lastCard }.frame(height: 160)
+          }
+        }.font(.system(size: 12)).tint(theme.blue)
+      }
     } else {
       AdaptiveOverviewPanels(width: width, expanded: expanded, condensed: condensed, theme: theme) {
         chartCard
@@ -63,7 +97,15 @@ struct MonitorOverview: View {
           }
         }
         Spacer(minLength: 4)
-        if metric == .memory {
+        if metric == .cpu {
+          VStack(alignment: .trailing, spacing: 4) {
+            CPUChartModePicker(individual: $individualCPU, theme: theme)
+            HStack(spacing: 8) {
+              dot("Total", theme.blue)
+              dot("System", theme.coral)
+            }
+          }
+        } else if metric == .memory {
           badge(pressureName, color: pressureColor)
         } else if !dense || (metric != .disk && metric != .network) {
           HStack(spacing: 12) {
@@ -188,7 +230,7 @@ struct MonitorOverview: View {
     switch metric {
     case .gpu: EmptyView()
     case .cpu:
-      VStack(alignment: .leading, spacing: dense ? 10 : 23) {
+      VStack(alignment: .leading, spacing: dense ? 4 : 10) {
         HStack {
           title("System at a glance")
           Spacer()
@@ -203,6 +245,11 @@ struct MonitorOverview: View {
           mini(architecture, "Architecture")
           mini(bytes(monitor.system.physical), "Physical memory")
         }
+        Text(monitor.cpuTopology.summary).font(.system(size: dense ? 9 : 10))
+          .foregroundStyle(theme.secondary).fixedSize(horizontal: false, vertical: true)
+          .help(
+            "Physical cores and logical processors are hardware counts. Threads above are software threads across readable processes."
+          )
       }
     case .memory:
       VStack(alignment: .leading, spacing: dense ? 10 : 23) {
