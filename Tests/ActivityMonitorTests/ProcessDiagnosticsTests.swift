@@ -8,8 +8,16 @@ import XCTest
 
 final class ProcessDiagnosticsTests: XCTestCase {
   func ownRow() throws -> ProcessRow {
-    let rows = Collector().collect().processes
-    return try XCTUnwrap(rows.first { $0.id == getpid() })
+    // These tests need a real PID/start pair, not network, GPU, user-directory,
+    // or power-service collection from every process on the host.
+    var start: UInt64 = 0
+    XCTAssertEqual(am_process_identity(getpid(), &start), 0)
+    var row = PerformanceFixture.rows(1)[0]
+    row.id = getpid()
+    row.uid = getuid()
+    row.start = start
+    row.accessible = true
+    return row
   }
   func testIdentityRejectsReuseAndExit() throws {
     var row = try ownRow()
