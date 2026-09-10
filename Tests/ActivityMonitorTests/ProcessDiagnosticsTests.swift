@@ -8,8 +8,16 @@ import XCTest
 
 final class ProcessDiagnosticsTests: XCTestCase {
   func ownRow() throws -> ProcessRow {
-    let rows = Collector().collect().processes
-    return try XCTUnwrap(rows.first { $0.id == getpid() })
+    // These tests need a real PID/start pair, not network, GPU, user-directory,
+    // or power-service collection from every process on the host.
+    var start: UInt64 = 0
+    XCTAssertEqual(am_process_identity(getpid(), &start), 0)
+    var row = PerformanceFixture.rows(1)[0]
+    row.id = getpid()
+    row.uid = getuid()
+    row.start = start
+    row.accessible = true
+    return row
   }
   func testIdentityRejectsReuseAndExit() throws {
     var row = try ownRow()
@@ -19,6 +27,22 @@ final class ProcessDiagnosticsTests: XCTestCase {
     XCTAssertFalse(DiagnosticCollector.read(identity: ProcessIdentity(row), tab: .files).valid)
     var info = AMProcessInfo()
     XCTAssertNotEqual(am_process_info(Int32.max, &info), 0)
+  }
+  func testDiagnosticCPUTimeMatchesGetrusageSeconds() {
+    func seconds(_ usage: rusage) -> Double {
+      Double(usage.ru_utime.tv_sec + usage.ru_stime.tv_sec)
+        + Double(usage.ru_utime.tv_usec + usage.ru_stime.tv_usec) / 1_000_000
+    }
+    var before = rusage()
+    var after = rusage()
+    var info = AMProcessInfo()
+    XCTAssertEqual(getrusage(RUSAGE_SELF, &before), 0)
+    XCTAssertEqual(am_process_info(getpid(), &info), 0)
+    XCTAssertEqual(info.taskError, 0)
+    XCTAssertEqual(getrusage(RUSAGE_SELF, &after), 0)
+    let measured = Double(info.userNS + info.systemNS) / 1e9
+    XCTAssertGreaterThanOrEqual(measured, seconds(before) - 0.005)
+    XCTAssertLessThanOrEqual(measured, seconds(after) + 0.005)
   }
   func testThreadIDsAndNanosecondAccountingMatchKernel() throws {
     var tid: UInt64 = 0

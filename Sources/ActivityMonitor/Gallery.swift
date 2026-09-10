@@ -27,20 +27,21 @@ struct DesignGallery: View {
         header(compact: geometry.size.width < 600).padding(GalleryLayout.inset)
         Divider()
         ScrollView {
-          LazyVStack(alignment: .leading, spacing: 24) {
+          LazyVGrid(
+            columns: Array(
+              repeating: GridItem(
+                .fixed(layout.cardWidth), spacing: GalleryLayout.spacing, alignment: .top),
+              count: layout.columnCount),
+            alignment: .leading, spacing: GalleryLayout.spacing
+          ) {
             ForEach(Metric.allCases) { metric in
-              VStack(alignment: .leading, spacing: 10) {
+              Section {
+                preview(metric, false, width: layout.cardWidth)
+                preview(metric, true, width: layout.cardWidth)
+              } header: {
                 Text(metric.rawValue).font(.system(size: 15, weight: .semibold))
-                LazyVGrid(
-                  columns: Array(
-                    repeating: GridItem(
-                      .fixed(layout.cardWidth), spacing: GalleryLayout.spacing, alignment: .top),
-                    count: layout.columnCount),
-                  alignment: .leading, spacing: GalleryLayout.spacing
-                ) {
-                  preview(metric, false, width: layout.cardWidth)
-                  preview(metric, true, width: layout.cardWidth)
-                }
+                  .frame(maxWidth: .infinity, alignment: .leading)
+                  .padding(.top, metric == .cpu ? 0 : 6)
               }
             }
           }.padding(GalleryLayout.inset)

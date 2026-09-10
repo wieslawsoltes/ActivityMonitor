@@ -1,4 +1,5 @@
 #include "ProcessDiagnostics.h"
+#include "SystemBridge.h"
 #include <libproc.h>
 #include <sys/proc_info.h>
 #include <mach/mach.h>
@@ -11,10 +12,6 @@
 #include <unistd.h>
 
 static int failure(void) { return errno ? errno : EIO; }
-static uint64_t nanos(uint64_t ticks) {
- mach_timebase_info_data_t t; mach_timebase_info(&t);
- return (uint64_t)((long double)ticks * t.numer / t.denom);
-}
 int am_process_identity(int32_t pid, uint64_t *start) {
  struct proc_bsdinfo b = {0}; *start = 0;
  if (proc_pidinfo(pid, PROC_PIDTBSDINFO, 0, &b, sizeof(b)) != sizeof(b)) return failure();
@@ -29,7 +26,7 @@ int am_process_info(int32_t pid, AMProcessInfo *o) {
  o->nice=b.pbi_nice; o->flags=b.pbi_flags; o->status=b.pbi_status; o->fileCount=b.pbi_nfiles;
  struct proc_taskinfo t={0};
  if (proc_pidinfo(pid, PROC_PIDTASKINFO, 0, &t, sizeof(t)) == sizeof(t)) {
-  o->userNS=nanos(t.pti_total_user); o->systemNS=nanos(t.pti_total_system);
+  o->userNS=am_host_nanoseconds(t.pti_total_user); o->systemNS=am_host_nanoseconds(t.pti_total_system);
   o->virtualBytes=t.pti_virtual_size; o->residentBytes=t.pti_resident_size;
   o->priority=t.pti_priority; o->runningThreads=t.pti_numrunning; o->policy=t.pti_policy;
   o->faults=t.pti_faults; o->pageins=t.pti_pageins; o->cowFaults=t.pti_cow_faults;

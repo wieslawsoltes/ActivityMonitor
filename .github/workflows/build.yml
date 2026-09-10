@@ -2,6 +2,10 @@ name: Build and test
 on:
   workflow_call:
     inputs:
+      include_intel:
+        description: 'Run native Intel tests in addition to Apple silicon'
+        type: boolean
+        default: false
       version:
         type: string
         default: '1.6.1'
@@ -13,7 +17,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        runner: [macos-latest, macos-26-intel]
+        runner: ${{ inputs.include_intel && fromJSON('["macos-latest","macos-26-intel"]') || fromJSON('["macos-latest"]') }}
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 20
     steps:
@@ -25,7 +29,7 @@ jobs:
       - name: Performance gate failure tests
         run: python3 -m unittest discover -s Tests/Performance -v
       - name: Build and test (includes headless UI and lifecycle gates)
-        run: swift test
+        run: python3 scripts/ci-tests.py
       - name: Release performance and memory gates
         run: ./scripts/performance.sh
       - name: Retain benchmark measurements
@@ -33,7 +37,9 @@ jobs:
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: performance-${{ matrix.runner }}
-          path: .build/performance/
+          path: |
+            .build/performance/
+            .build/ci-tests/
           retention-days: 30
           if-no-files-found: warn
   package:

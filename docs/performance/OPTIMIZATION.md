@@ -64,4 +64,6 @@ AM_PERFORMANCE=1 AM_RENDER_DIR=/tmp/activity-renders \
 
 For focused investigation, `AM_PERFORMANCE_CASE` selects a named synchronous benchmark and `AM_PERFORMANCE_ITERATIONS` repeats it. The scroll/refresh test always runs both related phases. Use the complete script for release gates.
 
-GitHub Actions runs correctness, headless tests and performance gates on both configured macOS architectures before packaging. Logs and JSON measurements are uploaded even on failure. Universal app signatures, DMG/ZIP contents, versions and download checksums remain separate release gates. Do not label queued CI as passed.
+GitHub Actions runs correctness, headless tests and performance gates on Apple silicon before packaging. Native Intel jobs are temporarily disabled by default while a hosted XCTest stall is investigated. To run them, select **Also run native Intel tests** when manually dispatching the CI workflow; reusable-workflow callers can set `include_intel: true`. Pull requests, main-branch pushes and releases use Apple silicon by default. Packaging still builds and verifies a universal app containing both arm64 and x86_64; cross-compilation does not replace native Intel runtime testing.
+
+Logs and JSON measurements are uploaded even on failure. Universal app signatures, DMG/ZIP contents, versions and download checksums remain separate release gates. Do not label queued CI as passed.
