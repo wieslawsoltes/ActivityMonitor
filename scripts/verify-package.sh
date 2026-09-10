@@ -1,7 +1,7 @@
 #!/bin/bash
 set -euo pipefail
 cd "$(dirname "$0")/.."
-VERSION="${VERSION:-1.3.2}"
+VERSION="${VERSION:-1.3.3}"
 APP='dist/Activity Monitor.app'
 for ARCH in arm64 x86_64; do
   lipo "$APP/Contents/MacOS/ActivityMonitor" -verify_arch "$ARCH"

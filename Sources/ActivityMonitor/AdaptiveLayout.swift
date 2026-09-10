@@ -15,6 +15,52 @@ struct MonitorLayout: Equatable {
   var inlineInspector: Bool { width >= 1120 && height >= 700 }
 }
 
+/// Measures the overview at its natural height, then gives the process list the rest of
+/// the viewport. A minimum list height keeps short windows usable through outer scrolling.
+struct WorkspaceLayout: Layout {
+  let viewportHeight: CGFloat
+  var minimumListHeight: CGFloat = 340
+
+  static func frames(
+    width: CGFloat, viewportHeight: CGFloat, overviewHeights: [CGFloat],
+    minimumListHeight: CGFloat = 340
+  ) -> [CGRect] {
+    var y: CGFloat = 0
+    var frames = overviewHeights.map { height in
+      let frame = CGRect(x: 0, y: y, width: width, height: height)
+      y += height
+      return frame
+    }
+    frames.append(
+      CGRect(
+        x: 0, y: y, width: width, height: max(minimumListHeight, viewportHeight - y)))
+    return frames
+  }
+
+  private func frames(width: CGFloat, subviews: Subviews) -> [CGRect] {
+    Self.frames(
+      width: width, viewportHeight: viewportHeight,
+      overviewHeights: subviews.dropLast().map {
+        $0.sizeThatFits(ProposedViewSize(width: width, height: nil)).height
+      }, minimumListHeight: minimumListHeight)
+  }
+
+  func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+    let width = proposal.width ?? 420
+    return CGSize(width: width, height: frames(width: width, subviews: subviews).last?.maxY ?? 0)
+  }
+
+  func placeSubviews(
+    in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()
+  ) {
+    for (view, frame) in zip(subviews, frames(width: bounds.width, subviews: subviews)) {
+      view.place(
+        at: CGPoint(x: bounds.minX + frame.minX, y: bounds.minY + frame.minY),
+        anchor: .topLeading, proposal: ProposedViewSize(frame.size))
+    }
+  }
+}
+
 /// A three-panel layout shared by every metric. Its geometry is also independently testable.
 struct OverviewGrid: Layout {
   var expanded = false
