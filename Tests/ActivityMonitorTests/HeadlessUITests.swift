@@ -111,6 +111,80 @@ struct UpdatingProcessTableHarness: View {
       }
     }
   }
+  func testFilteringAtBottomThroughEmptyResultsRendersAgain() async throws {
+    let suite = "ActivityMonitor.Headless.Filter.\(UUID())"
+    let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+    defer { defaults.removePersistentDomain(forName: suite) }
+    let rows = PerformanceFixture.rows(1000)
+    let store = HeadlessProcessStore(rows)
+    let host = NSHostingView(
+      rootView: UpdatingProcessTableHarness(store: store).defaultAppStorage(defaults))
+    host.frame = CGRect(x: 0, y: 0, width: 1000, height: 600)
+    let window = NSWindow(
+      contentRect: host.frame, styleMask: [.borderless], backing: .buffered, defer: false)
+    window.isReleasedWhenClosed = false
+    window.contentView = host
+    defer { window.close() }
+    try await settle(host)
+    _ = try bitmap(host)
+    try await settle(host)
+    let anchor = try XCTUnwrap(descendant(host, ProcessTableViewport.Anchor.self))
+    let scroll = try XCTUnwrap(anchor.enclosingScrollView)
+    let document = try XCTUnwrap(scroll.documentView)
+    scroll.contentView.scroll(
+      to: CGPoint(x: 0, y: document.bounds.height - scroll.contentView.bounds.height))
+    scroll.reflectScrolledClipView(scroll.contentView)
+    try await settle(host)
+    for result in [[], Array(rows.prefix(3)), rows, Array(rows.prefix(2))] {
+      store.rows = result
+      try await settle(host)
+      _ = try bitmap(host)
+      try await settle(host)
+      if !result.isEmpty {
+        XCTAssertTrue(
+          rowHasInk(try bitmap(host), width: 1000, dark: false),
+          "Blank filtered result with \(result.count) rows")
+      }
+    }
+  }
+  func testPinnedHeaderIsOpaqueAtHorizontalAndVerticalOverflow() async throws {
+    let suite = "ActivityMonitor.Headless.Header.\(UUID())"
+    let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+    defaults.set(true, forKey: "showAllProcessColumns")
+    defer { defaults.removePersistentDomain(forName: suite) }
+    for dark in [false, true] {
+      let host = NSHostingView(
+        rootView: ProcessTableHarness(rows: PerformanceFixture.rows(1000), dark: dark)
+          .defaultAppStorage(defaults))
+      host.frame = CGRect(x: 0, y: 0, width: 420, height: 600)
+      let window = NSWindow(
+        contentRect: host.frame, styleMask: [.borderless], backing: .buffered, defer: false)
+      window.isReleasedWhenClosed = false
+      window.contentView = host
+      defer { window.close() }
+      try await settle(host)
+      _ = try bitmap(host)
+      try await settle(host)
+      let anchor = try XCTUnwrap(descendant(host, ProcessTableViewport.Anchor.self))
+      let scroll = try XCTUnwrap(anchor.enclosingScrollView)
+      let document = try XCTUnwrap(scroll.documentView)
+      XCTAssertGreaterThan(document.bounds.width, scroll.contentView.bounds.width)
+      scroll.contentView.scroll(
+        to: CGPoint(x: document.bounds.width - scroll.contentView.bounds.width, y: 4007))
+      scroll.reflectScrolledClipView(scroll.contentView)
+      try await settle(host)
+      let image = try bitmap(host)
+      let scale = CGFloat(image.pixelsWide) / 420
+      let expected = try XCTUnwrap(NSColor(MonitorTheme(dark: dark).subtle).usingColorSpace(.sRGB))
+      for x in stride(from: 20, through: 380, by: 20) {
+        let color = try XCTUnwrap(
+          image.colorAt(x: Int(CGFloat(x) * scale), y: Int(80 * scale))?.usingColorSpace(.sRGB))
+        XCTAssertEqual(color.redComponent, expected.redComponent, accuracy: 0.02)
+        XCTAssertEqual(color.greenComponent, expected.greenComponent, accuracy: 0.02)
+        XCTAssertEqual(color.blueComponent, expected.blueComponent, accuracy: 0.02)
+      }
+    }
+  }
   func testEveryOverviewAndInspectorRenderInBothThemes() throws {
     let monitor = PerformanceFixture.monitor()
     for dark in [false, true] {

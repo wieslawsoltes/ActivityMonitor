@@ -126,10 +126,11 @@ struct MonitorProcessTable: View {
             VStack(spacing: 0) {
               header(layout, columns: visibleColumns).frame(height: 36)
               Rectangle().fill(theme.separator).frame(height: 1)
-            }.background(theme.subtle)
-              .offset(x: -horizontalOffset)
-              .frame(width: viewportWidth ?? fallback, height: 37, alignment: .leading)
-              .clipped()
+            }
+            .offset(x: -horizontalOffset)
+            .frame(width: viewportWidth ?? fallback, height: 37, alignment: .leading)
+            .clipped()
+            .background(theme.subtle)
           }
           .overlay {
             if rows.isEmpty { ContentUnavailableView.search(text: query).padding(.top, 37) }

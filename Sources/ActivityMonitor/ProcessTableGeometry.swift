@@ -97,6 +97,8 @@ struct ProcessViewportRows<RowContent: View>: View {
           if abs(viewport.minX - rect.minX) > 0.1 { horizontalChanged(rect.minX) }
           if ProcessVisibleRows.range(count: entries.count, viewport: rect) != range
             || abs(viewport.minX - rect.minX) > 0.1
+            // Remember the reset origin even when both visible ranges are empty.
+            || (entries.isEmpty && viewport != rect)
           {
             viewport = rect
           }
