@@ -32,6 +32,24 @@ final class AdaptiveLayoutTests: XCTestCase {
     XCTAssertEqual(standard[0].width / standard[1].width, 1.82, accuracy: 0.001)
     XCTAssertEqual(standard[2].maxY, 213)
   }
+  func testCompactOverviewLeavesRoomForProcessesWithoutHidingMediumWidthDetails() {
+    for width in [CGFloat(668), 800, 1067] {
+      let panels = OverviewGrid.frames(width: width, expanded: false)
+      XCTAssertEqual(panels[0].height, 148)
+      XCTAssertEqual(panels[1].minY, 158)
+      XCTAssertEqual(panels[1].maxY, panels[2].maxY)
+      XCTAssertLessThanOrEqual(panels[2].maxY, 306)
+      // Previously these same two rows occupied 440 points before the table.
+      XCTAssertGreaterThanOrEqual(440 - panels[2].maxY, 134)
+    }
+    let shortWindow = MonitorLayout(width: 1440, height: 600)
+    XCTAssertTrue(shortWindow.denseOverview)
+    XCTAssertEqual(shortWindow.overviewHeight, 148)
+    let shortPanels = OverviewGrid.frames(width: 1388, expanded: false, condensed: true)
+    XCTAssertEqual(shortPanels.map(\.maxY), [148, 148, 148])
+    XCTAssertFalse(MonitorLayout(width: 1440, height: 900).denseOverview)
+    XCTAssertEqual(OverviewGrid.frames(width: 1748, expanded: true)[2].maxY, 280)
+  }
   func testPriorityColumnsRetainSortAndRespectAvailableColumns() {
     let columns = ["primary", "gpuTime", "cpu", "memory", "pid", "user"].map {
       ProcessColumn(id: $0, title: $0, weight: 1)

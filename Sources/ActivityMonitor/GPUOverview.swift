@@ -7,8 +7,10 @@ struct GPUOverview: View {
   var device: GPUDeviceSample? { monitor.gpuDevice }
   var width: CGFloat = 1068
   var expanded = false
+  var condensed = false
+  private var dense: Bool { condensed || width < 1068 }
   var body: some View {
-    AdaptiveOverviewPanels(width: width, expanded: expanded, theme: theme) {
+    AdaptiveOverviewPanels(width: width, expanded: expanded, condensed: condensed, theme: theme) {
       hero
     } detail: {
       breakdown
@@ -23,9 +25,11 @@ struct GPUOverview: View {
         VStack(alignment: .leading, spacing: 3) {
           Text("GPU utilization").font(.system(size: 12)).foregroundStyle(theme.secondary)
           HStack(alignment: .firstTextBaseline, spacing: 4) {
-            Text(gpuPercent(device?.utilization)).font(.system(size: 34, weight: .medium))
-              .tracking(-1.3)
-            Text(device?.utilization == nil ? "" : "%").font(.system(size: 18))
+            Text(gpuPercent(device?.utilization)).font(
+              .system(size: dense ? 26 : 34, weight: .medium)
+            )
+            .tracking(-1.3)
+            Text(device?.utilization == nil ? "" : "%").font(.system(size: dense ? 14 : 18))
               .foregroundStyle(theme.secondary)
             Text(
               device?.utilization == nil
@@ -43,15 +47,15 @@ struct GPUOverview: View {
       GPUHistoryPlot(
         points: monitor.gpuHistories[device?.id ?? 0] ?? [], range: range,
         interval: monitor.interval, theme: theme
-      ).padding(.top, 10)
+      ).padding(.top, dense ? 6 : 10)
     }.monospacedDigit()
   }
   var breakdown: some View {
 
     VStack(alignment: .leading, spacing: 0) {
       Text("Engine activity").font(.system(size: 12, weight: .medium))
-      engine("Renderer", value: device?.renderer, color: theme.blue).padding(.top, 22)
-      engine("Tiler", value: device?.tiler, color: theme.purple).padding(.top, 17)
+      engine("Renderer", value: device?.renderer, color: theme.blue).padding(.top, dense ? 10 : 22)
+      engine("Tiler", value: device?.tiler, color: theme.purple).padding(.top, dense ? 8 : 17)
       Spacer(minLength: 8)
       Text("Engines can work at the same time.").font(.system(size: 9)).foregroundStyle(
         theme.tertiary)
@@ -66,24 +70,25 @@ struct GPUOverview: View {
         Image(systemName: "square.3.layers.3d").font(.system(size: 18, weight: .light))
           .foregroundStyle(theme.tertiary)
       }
-      Text(device?.name ?? "No GPU detected").font(.system(size: 19, weight: .medium))
+      Text(device?.name ?? "No GPU detected").font(.system(size: dense ? 17 : 19, weight: .medium))
         .tracking(-0.4)
         .lineLimit(1).minimumScaleFactor(0.7).help(device?.name ?? "No GPU detected").padding(
-          .top, 19)
+          .top, dense ? 8 : 19)
       Text(
         device?.unifiedMemory.map { $0 ? "Unified memory" : "Discrete memory" }
           ?? "Memory architecture unavailable"
       )
       .font(.system(size: 10)).foregroundStyle(theme.secondary).padding(.top, 4)
-      Rectangle().fill(theme.separator).frame(height: 1).padding(.vertical, 15)
+      Rectangle().fill(theme.separator).frame(height: 1).padding(.vertical, dense ? 8 : 15)
       detail("GPU memory in use", device?.memoryUsed.map(bytes) ?? "—")
-      detail("Driver allocation", device?.memoryAllocated.map(bytes) ?? "—").padding(.top, 11)
+      detail("Driver allocation", device?.memoryAllocated.map(bytes) ?? "—").padding(
+        .top, dense ? 6 : 11)
     }.help(
       "Driver-reported system memory. Allocation is not VRAM capacity and may overlap process memory."
     )
   }
   func engine(_ title: String, value: Double?, color: Color) -> some View {
-    VStack(spacing: 9) {
+    VStack(spacing: dense ? 5 : 9) {
       HStack {
         Circle().fill(color).frame(width: 6, height: 6)
         Text(title).foregroundStyle(theme.secondary)

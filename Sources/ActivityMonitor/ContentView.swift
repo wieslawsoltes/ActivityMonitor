@@ -201,34 +201,26 @@ struct ContentView: View {
   }
   @ViewBuilder func workspace(_ layout: MonitorLayout, scrolling: Bool) -> some View {
     VStack(spacing: 0) {
-      if layout.standard {
+      if !layout.denseOverview {
         sectionHeading.padding(.top, 23).padding(.bottom, 20)
       } else {
-        VStack(alignment: .leading, spacing: 12) {
-          HStack {
-            Text(heading).font(.system(size: 23, weight: .semibold)).tracking(-0.6)
-            Spacer(minLength: 4)
-            Circle().fill(monitor.paused ? theme.secondary : theme.green).frame(width: 6, height: 6)
-            Text(monitor.paused ? "Paused" : "Live").font(.system(size: 10)).foregroundStyle(
-              theme.secondary)
+        HStack(spacing: 8) {
+          if metric == .gpu {
+            GPUDevicePicker(theme: theme)
+          } else {
+            Text(metric.rawValue + " activity")
+              .font(.system(size: 18, weight: .semibold)).tracking(-0.4)
           }
-          HStack {
-            if metric == .gpu {
-              GPUDevicePicker(theme: theme)
-            } else {
-              Text(metric.rawValue + " overview").font(.system(size: 11)).foregroundStyle(
-                theme.secondary)
-            }
-            Spacer(minLength: 4)
-            HistoryRangePicker(range: $range, theme: theme)
-          }
-        }.padding(.vertical, 18)
+          Spacer(minLength: 4)
+          HistoryRangePicker(range: $range, theme: theme)
+        }.padding(.vertical, 6)
       }
       MonitorOverview(
         metric: metric, range: range, theme: theme,
-        width: layout.width - layout.gutter * 2, expanded: layout.expanded
+        width: layout.width - layout.gutter * 2, expanded: layout.expanded,
+        condensed: layout.denseOverview
       )
-      .padding(.bottom, layout.standard ? 24 : 16)
+      .padding(.bottom, layout.denseOverview ? 10 : 24)
       HStack(spacing: 16) {
         MonitorProcessTable(
           rows: filtered, metric: metric, theme: theme, query: $query, filter: $filter,
@@ -288,11 +280,11 @@ struct ContentView: View {
             }
             .menuStyle(.borderlessButton).menuIndicator(.hidden).fixedSize().help("More")
           }.padding(.horizontal, layout.gutter)
-        }.frame(height: 50)
+        }.frame(height: 44)
         MetricSwitcher(
           metric: Binding(get: { metric }, set: selectMetric), theme: theme, compact: layout.compact
         )
-        .padding(.horizontal, layout.gutter).padding(.bottom, 10)
+        .padding(.horizontal, layout.gutter).padding(.bottom, 4)
       }.background(theme.toolbar).overlay(alignment: .bottom) {
         Rectangle().fill(theme.border).frame(height: 1)
       }
