@@ -4,7 +4,7 @@ Validated on 10 September 2026, on an Apple silicon Mac with 11 logical processo
 
 ## Automated checks
 
-- `swift test`: 117 tests, zero failures; seven opt-in performance tests skipped in the normal run.
+- `swift test`: 121 tests, zero failures; seven opt-in performance tests skipped in the normal run.
 - Release performance run: all 22 measurement budgets and memory gates passed. The 15-minute diagnostic workspace measured 81.82 ms median / 87.77 ms p95; the 2,500-row diagnostic table measured 38.92 ms median / 38.93 ms p95.
 - Performance gate tests: six passed. Packaging/notarization failure-path tests: six passed.
 - Universal release build: arm64 and x86_64 compiled successfully.
@@ -43,6 +43,15 @@ The universal 1.6.0 local candidate was rebuilt and its DMG/ZIP contents verifie
 - The focused mapping and diagnostics UI suite passed eight tests after the final layout refinements. All fifteen diagnostic pages retain their tables at both tested window sizes.
 - Native checks on a running VM exercised protection bars, virtual address intervals, Resident/Virtual size selection, path filtering, bar inspection and show/hide behavior. A compact 800 × 524 window opened the chart popover; arrow-key inspection selected the first image, and enlarging the window restored the inline chart. Two executable mappings of one library (48 KB each) correctly contributed 96 KB to its filtered virtual-size bar. Screenshots cover both appearances.
 - Release performance with 16,384 mapping records measured 3.11 ms median / 4.18 ms p95 for aggregation and 30.35 ms median / 38.22 ms p95 for chart rendering. All 22 measurement gates passed.
+
+## Adaptive CPU state retention
+
+- Window-owned chart preferences survive the overview being reconstructed when workspace scrolling changes at adaptive width and height boundaries. The menu-bar monitor owns separate retained preferences; process sessions retain thread-grid filtering and pagination.
+- Four regression tests cover resizing the actual main view across compact/standard/short/expanded sizes, default mode and retained settings, grid height budgets, balanced rows for uneven processor counts, and page resets only for explicit filter/layout changes.
+- Native checks retained Logical processors, Paged charts and a Performance filter across narrow/wide resizing and a CPU → Memory → CPU round trip. Shortening a wide window retained all eleven charts and adapted the grid to a single row; restoring height returned the balanced six-plus-five layout.
+- The final 121-test suite passed with seven opt-in performance tests skipped; all 22 release performance gates passed separately. The universal candidate was rebuilt and verified after the fix.
+
+![Logical processors retained in a short window](../screenshots/cpu-details/processors-short-dark.jpg)
 
 ## Limits
 
