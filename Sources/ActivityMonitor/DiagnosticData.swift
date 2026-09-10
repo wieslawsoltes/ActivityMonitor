@@ -366,13 +366,14 @@ enum DiagnosticCollector {
       status: permissionStatus(error, count: Int(count), truncated: truncated), date: Date())
   }
   static func images(_ pid: Int32) -> DiagnosticSection {
-    let maps = regions(pid)
-    var seen = Set<String>()
+    images(in: regions(pid))
+  }
+  static func images(in maps: DiagnosticSection) -> DiagnosticSection {
     let images = maps.records.filter { record in
-      guard let path = record.path, record.cells["Protection"]?.contains("x") == true else {
+      guard record.path != nil, record.cells["Protection"]?.contains("x") == true else {
         return false
       }
-      return seen.insert(path).inserted
+      return true
     }
     return .init(
       columns: ["Path", "Address", "Size", "Resident", "Protection"], records: images,
@@ -408,4 +409,4 @@ enum DiagnosticCollector {
       date: Date())
   }
 }
-extension String { fileprivate var nonempty: String? { isEmpty ? nil : self } }
+extension String { var nonempty: String? { isEmpty ? nil : self } }
