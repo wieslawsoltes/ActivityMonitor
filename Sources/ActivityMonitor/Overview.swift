@@ -9,11 +9,14 @@ struct MonitorOverview: View {
   var appCPU: Double { monitor.rows.filter(\.isApp).reduce(0) { $0 + $1.cpu } }
   var width: CGFloat = 1068
   var expanded = false
+  var condensed = false
+  private var dense: Bool { condensed || width < 1068 }
   var body: some View {
     if metric == .gpu {
-      GPUOverview(range: range, theme: theme, width: width, expanded: expanded)
+      GPUOverview(
+        range: range, theme: theme, width: width, expanded: expanded, condensed: condensed)
     } else {
-      AdaptiveOverviewPanels(width: width, expanded: expanded, theme: theme) {
+      AdaptiveOverviewPanels(width: width, expanded: expanded, condensed: condensed, theme: theme) {
         chartCard
       } detail: {
         middleCard
@@ -45,8 +48,9 @@ struct MonitorOverview: View {
                 metric == .cpu
                   ? String(format: "%.1f", monitor.userCPU + monitor.systemCPU)
                   : metric == .memory ? byteParts(used).0 : String(format: "%.1f", appCPU)
-              ).font(.system(size: 34, weight: .medium)).tracking(-1.3).foregroundStyle(theme.text)
-              Text(metric == .memory ? byteParts(used).1 : "%").font(.system(size: 18))
+              ).font(.system(size: dense ? 26 : 34, weight: .medium)).tracking(-1.3)
+                .foregroundStyle(theme.text)
+              Text(metric == .memory ? byteParts(used).1 : "%").font(.system(size: dense ? 14 : 18))
                 .foregroundStyle(theme.secondary)
               Text(
                 metric == .cpu
@@ -59,7 +63,7 @@ struct MonitorOverview: View {
         Spacer(minLength: 4)
         if metric == .memory {
           badge(pressureName, color: pressureColor)
-        } else {
+        } else if !dense || (metric != .disk && metric != .network) {
           HStack(spacing: 12) {
             dot(
               metric == .cpu
@@ -74,7 +78,7 @@ struct MonitorOverview: View {
       HistoryPlot(
         points: monitor.histories[metric] ?? [], metric: metric, range: range, theme: theme,
         physical: Double(monitor.system.physical)
-      ).padding(.top, 10)
+      ).padding(.top, dense ? 6 : 10)
     }.monospacedDigit()
       .help(
         metric == .cpu
@@ -89,14 +93,14 @@ struct MonitorOverview: View {
         stacked([
           (monitor.userCPU, theme.blue), (monitor.systemCPU, theme.coral),
           (max(0, 100 - monitor.userCPU - monitor.systemCPU), theme.recessed),
-        ]).padding(.top, 25)
-        VStack(spacing: 12) {
+        ]).padding(.top, dense ? 8 : 25)
+        VStack(spacing: dense ? 6 : 12) {
           detail("User", String(format: "%.2f%%", monitor.userCPU), theme.blue)
           detail("System", String(format: "%.2f%%", monitor.systemCPU), theme.coral)
           detail(
             "Idle", String(format: "%.2f%%", max(0, 100 - monitor.userCPU - monitor.systemCPU)),
             theme.recessed)
-        }.padding(.top, 21)
+        }.padding(.top, dense ? 8 : 21)
       }
     case .memory:
       VStack(alignment: .leading, spacing: 0) {
@@ -105,13 +109,13 @@ struct MonitorOverview: View {
           (Double(monitor.system.active), theme.blue), (Double(monitor.system.wired), theme.purple),
           (Double(monitor.system.compressed), theme.amber),
           (Double(monitor.system.free), theme.recessed),
-        ]).padding(.top, 25)
-        VStack(spacing: 10) {
+        ]).padding(.top, dense ? 8 : 25)
+        VStack(spacing: dense ? 6 : 10) {
           detail("Active memory", bytes(monitor.system.active), theme.blue)
           detail("Wired", bytes(monitor.system.wired), theme.purple)
           detail("Compressed", bytes(monitor.system.compressed), theme.amber)
           detail("Free", bytes(monitor.system.free), theme.recessed)
-        }.padding(.top, 19)
+        }.padding(.top, dense ? 8 : 19)
       }
     case .energy:
       VStack(alignment: .leading, spacing: 0) {
@@ -123,10 +127,11 @@ struct MonitorOverview: View {
         HStack {
           HStack(alignment: .firstTextBaseline, spacing: 1) {
             Text(monitor.system.battery < 0 ? "—" : "\(monitor.system.battery)").font(
-              .system(size: 38, weight: .medium)
+              .system(size: dense ? 27 : 38, weight: .medium)
             ).tracking(-1.7)
-            Text(monitor.system.battery < 0 ? "" : "%").font(.system(size: 22)).foregroundStyle(
-              theme.secondary)
+            Text(monitor.system.battery < 0 ? "" : "%").font(.system(size: dense ? 16 : 22))
+              .foregroundStyle(
+                theme.secondary)
           }
           Spacer()
           ZStack {
@@ -137,7 +142,7 @@ struct MonitorOverview: View {
             RoundedRectangle(cornerRadius: 1).fill(theme.green).frame(width: 3, height: 13).offset(
               x: 5)
           }
-        }.padding(.top, 19)
+        }.padding(.top, dense ? 8 : 19)
         Label(
           monitor.system.battery < 0
             ? "No battery installed"
@@ -146,8 +151,8 @@ struct MonitorOverview: View {
           systemImage: "checkmark.circle"
         ).font(.system(size: 10)).foregroundStyle(theme.green).padding(.top, 5)
         BatterySparkline(points: monitor.histories[.energy] ?? [], color: theme.green).frame(
-          height: 29
-        ).padding(.top, 22)
+          height: dense ? 16 : 29
+        ).padding(.top, dense ? 8 : 22)
         HStack {
           Text("This session")
           Spacer()
@@ -161,8 +166,8 @@ struct MonitorOverview: View {
           metric == .disk ? "Read" : "Received",
           metric == .disk ? monitor.rows.reduce(0) { $0 + $1.read } : monitor.system.received,
           theme.blue
-        ).padding(.top, 23)
-        Rectangle().fill(theme.separator).frame(height: 1).padding(.vertical, 16)
+        ).padding(.top, dense ? 8 : 23)
+        Rectangle().fill(theme.separator).frame(height: 1).padding(.vertical, dense ? 8 : 16)
         transfer(
           metric == .disk ? "Written" : "Sent",
           metric == .disk ? monitor.rows.reduce(0) { $0 + $1.written } : monitor.system.sent,
@@ -174,7 +179,7 @@ struct MonitorOverview: View {
     switch metric {
     case .gpu: EmptyView()
     case .cpu:
-      VStack(alignment: .leading, spacing: 23) {
+      VStack(alignment: .leading, spacing: dense ? 10 : 23) {
         HStack {
           title("System at a glance")
           Spacer()
@@ -191,7 +196,7 @@ struct MonitorOverview: View {
         }
       }
     case .memory:
-      VStack(alignment: .leading, spacing: 23) {
+      VStack(alignment: .leading, spacing: dense ? 10 : 23) {
         HStack {
           title("Capacity & cache")
           Spacer()
@@ -215,11 +220,12 @@ struct MonitorOverview: View {
           Spacer()
           Image(systemName: "powerplug").foregroundStyle(theme.tertiary)
         }
-        Text(uptime).font(.system(size: 28, weight: .medium)).tracking(-0.8).padding(.top, 20)
+        Text(uptime).font(.system(size: dense ? 23 : 28, weight: .medium)).tracking(-0.8).padding(
+          .top, dense ? 8 : 20)
         Text("System uptime").font(.system(size: 10)).foregroundStyle(theme.secondary).padding(
           .top, 5)
-        Rectangle().fill(theme.separator).frame(height: 1).padding(.vertical, 18)
-        VStack(spacing: 12) {
+        Rectangle().fill(theme.separator).frame(height: 1).padding(.vertical, dense ? 8 : 18)
+        VStack(spacing: dense ? 6 : 12) {
           detail("Low Power Mode", ProcessInfo.processInfo.isLowPowerModeEnabled ? "On" : "Off")
           detail("Thermal state", thermal)
         }
@@ -230,9 +236,9 @@ struct MonitorOverview: View {
         HStack {
           mini(monitor.rows.filter(\.ioAccessible).count.formatted(), "Processes reporting")
           mini(monitor.rows.count.formatted(), "Total processes")
-        }.padding(.top, 25)
-        Rectangle().fill(theme.separator).frame(height: 1).padding(.vertical, 20)
-        VStack(spacing: 12) {
+        }.padding(.top, dense ? 8 : 25)
+        Rectangle().fill(theme.separator).frame(height: 1).padding(.vertical, dense ? 8 : 20)
+        VStack(spacing: dense ? 6 : 12) {
           detail("Read / sec", bytes(UInt64(monitor.readRate)), theme.blue)
           detail("Write / sec", bytes(UInt64(monitor.writeRate)), theme.coral)
         }
@@ -243,9 +249,9 @@ struct MonitorOverview: View {
         HStack {
           mini(shortCount(monitor.system.packetsIn), "Packets in")
           mini(shortCount(monitor.system.packetsOut), "Packets out")
-        }.padding(.top, 25)
-        Rectangle().fill(theme.separator).frame(height: 1).padding(.vertical, 20)
-        VStack(spacing: 12) {
+        }.padding(.top, dense ? 8 : 25)
+        Rectangle().fill(theme.separator).frame(height: 1).padding(.vertical, dense ? 8 : 20)
+        VStack(spacing: dense ? 6 : 12) {
           detail("Packets in / sec", String(Int(monitor.packetReceiveRate)), theme.blue)
           detail("Packets out / sec", String(Int(monitor.packetSendRate)), theme.coral)
         }
@@ -272,7 +278,7 @@ struct MonitorOverview: View {
       Text(name).foregroundStyle(theme.secondary)
       Spacer(minLength: 4)
       Text(value).foregroundStyle(theme.text).monospacedDigit()
-    }.font(.system(size: 12))
+    }.font(.system(size: dense ? 11 : 12))
   }
   func stacked(_ pieces: [(Double, Color)]) -> some View {
     GeometryReader { g in
@@ -283,21 +289,23 @@ struct MonitorOverview: View {
             width: max(0, (g.size.width - CGFloat(pieces.count - 1) * 3) * pieces[i].0 / sum))
         }
       }
-    }.frame(height: 7)
+    }.frame(height: dense ? 5 : 7)
   }
   func mini(_ value: String, _ label: String) -> some View {
-    VStack(alignment: .leading, spacing: 5) {
-      Text(value).font(.system(size: 23, weight: .medium)).tracking(-0.5).foregroundStyle(
-        theme.text
-      ).monospacedDigit()
+    VStack(alignment: .leading, spacing: dense ? 3 : 5) {
+      Text(value).font(.system(size: dense ? 18 : 23, weight: .medium)).tracking(-0.5)
+        .foregroundStyle(
+          theme.text
+        ).monospacedDigit()
       Text(label).font(.system(size: 11)).foregroundStyle(theme.secondary)
     }.frame(maxWidth: .infinity, alignment: .leading)
   }
   func transfer(_ name: String, _ value: UInt64, _ color: Color) -> some View {
-    VStack(alignment: .leading, spacing: 5) {
+    VStack(alignment: .leading, spacing: dense ? 3 : 5) {
       dot(name, color)
       HStack(alignment: .firstTextBaseline, spacing: 5) {
-        Text(byteParts(value).0).font(.system(size: 27, weight: .medium)).tracking(-0.7)
+        Text(byteParts(value).0).font(.system(size: dense ? 21 : 27, weight: .medium)).tracking(
+          -0.7)
         Text(byteParts(value).1).font(.system(size: 12)).foregroundStyle(theme.secondary)
       }
     }
@@ -309,7 +317,9 @@ struct MonitorOverview: View {
         Text(name).foregroundStyle(theme.secondary)
       }.font(.system(size: 11))
       HStack(alignment: .firstTextBaseline, spacing: 2) {
-        Text(byteParts(UInt64(max(0, value))).0).font(.system(size: 28, weight: .medium)).tracking(
+        Text(byteParts(UInt64(max(0, value))).0).font(
+          .system(size: dense ? 23 : 28, weight: .medium)
+        ).tracking(
           -0.7)
         Text(byteParts(UInt64(max(0, value))).1 + "/s").font(.system(size: 11)).foregroundStyle(
           theme.secondary)

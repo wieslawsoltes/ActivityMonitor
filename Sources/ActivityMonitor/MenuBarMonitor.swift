@@ -58,7 +58,7 @@ struct MenuBarMonitor: View {
       }.padding(16)
       MetricSwitcher(metric: $metric, theme: theme, compact: true).padding(.horizontal, 14)
       ScrollView {
-        VStack(spacing: 14) {
+        VStack(spacing: 10) {
           HStack {
             if metric == .gpu {
               GPUDevicePicker(theme: theme)

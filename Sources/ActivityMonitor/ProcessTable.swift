@@ -98,11 +98,12 @@ struct MonitorProcessTable: View {
   }
   var body: some View {
     GeometryReader { g in
+      let toolbarHeight: CGFloat = g.size.width >= 900 ? 61 : 76
       VStack(spacing: 0) {
         if g.size.width >= 900 {
-          toolbar.frame(height: 61)
+          toolbar.frame(height: toolbarHeight)
         } else {
-          compactToolbar.frame(height: 96)
+          compactToolbar.frame(height: toolbarHeight)
         }
         Rectangle().fill(theme.separator).frame(height: 1)
         let width = max(minTableWidth, g.size.width)
@@ -143,7 +144,7 @@ struct MonitorProcessTable: View {
                   return .handled
                 }
             }
-          }.frame(width: width, height: max(100, g.size.height - (g.size.width >= 900 ? 62 : 97)))
+          }.frame(width: width, height: max(100, g.size.height - toolbarHeight - 1))
         }.scrollIndicators(.automatic)
           .onAppear { availableWidth = g.size.width }
           .onChange(of: g.size.width) { availableWidth = g.size.width }

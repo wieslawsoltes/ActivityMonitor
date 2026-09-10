@@ -9,7 +9,8 @@ struct MonitorLayout: Equatable {
   var expanded: Bool { width >= 1600 }
   var scrollsWorkspace: Bool { !standard || height < 700 }
   var gutter: CGFloat { compact ? 14 : 26 }
-  var overviewHeight: CGFloat { expanded ? 280 : 213 }
+  var denseOverview: Bool { !standard || height < 700 }
+  var overviewHeight: CGFloat { denseOverview ? 148 : expanded ? 280 : 213 }
   var inspectorWidth: CGFloat { expanded ? 340 : 298 }
   var inlineInspector: Bool { width >= 1120 && height >= 700 }
 }
@@ -17,10 +18,12 @@ struct MonitorLayout: Equatable {
 /// A three-panel layout shared by every metric. Its geometry is also independently testable.
 struct OverviewGrid: Layout {
   var expanded = false
-  static func frames(width: CGFloat, expanded: Bool) -> [CGRect] {
+  var condensed = false
+  static func frames(width: CGFloat, expanded: Bool, condensed: Bool = false) -> [CGRect] {
     let width = max(0, width)
-    let gap: CGFloat = 14
-    let height: CGFloat = expanded ? 280 : 213
+    let dense = condensed || width < 1068
+    let gap: CGFloat = dense ? 10 : 14
+    let height: CGFloat = dense ? 148 : expanded ? 280 : 213
     if width >= 1068 {
       let unit = max(0, width - 2 * gap) / 3.82
       return [
@@ -33,8 +36,8 @@ struct OverviewGrid: Layout {
       let half = max(0, width - gap) / 2
       return [
         CGRect(x: 0, y: 0, width: width, height: height),
-        CGRect(x: 0, y: height + gap, width: half, height: 213),
-        CGRect(x: half + gap, y: height + gap, width: half, height: 213),
+        CGRect(x: 0, y: height + gap, width: half, height: height),
+        CGRect(x: half + gap, y: height + gap, width: half, height: height),
       ]
     }
     return (0..<3).map {
@@ -43,13 +46,15 @@ struct OverviewGrid: Layout {
   }
   func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
     let width = proposal.width ?? 1068
-    let frames = Self.frames(width: width, expanded: expanded)
+    let frames = Self.frames(width: width, expanded: expanded, condensed: condensed)
     return CGSize(width: width, height: frames.last?.maxY ?? 0)
   }
   func placeSubviews(
     in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()
   ) {
-    for (view, frame) in zip(subviews, Self.frames(width: bounds.width, expanded: expanded)) {
+    for (view, frame) in zip(
+      subviews, Self.frames(width: bounds.width, expanded: expanded, condensed: condensed))
+    {
       view.place(
         at: CGPoint(x: bounds.minX + frame.minX, y: bounds.minY + frame.minY),
         anchor: .topLeading, proposal: ProposedViewSize(frame.size))
@@ -60,30 +65,32 @@ struct OverviewGrid: Layout {
 struct AdaptiveOverviewPanels<Hero: View, Detail: View, Context: View>: View {
   let width: CGFloat
   let expanded: Bool
+  var condensed = false
   let theme: MonitorTheme
   @ViewBuilder let hero: Hero
   @ViewBuilder let detail: Detail
   @ViewBuilder let context: Context
   @State private var details = false
   @Environment(\.accessibilityReduceMotion) private var reduceMotion
+  private var dense: Bool { condensed || width < 1068 }
   var body: some View {
     if width < 668 {
       VStack(spacing: 10) {
-        DesignCard(theme: theme, padding: 19) { hero }.frame(height: 213)
+        DesignCard(theme: theme, padding: 12) { hero }.frame(height: 148)
         DisclosureGroup("Breakdown & device details", isExpanded: $details) {
-          VStack(spacing: 14) {
-            DesignCard(theme: theme) { detail }.frame(height: 213)
-            DesignCard(theme: theme) { context }.frame(height: 213)
-          }.padding(.top, 12)
+          VStack(spacing: 10) {
+            DesignCard(theme: theme, padding: 12) { detail }.frame(height: 148)
+            DesignCard(theme: theme, padding: 12) { context }.frame(height: 148)
+          }.padding(.top, 8)
         }.font(.system(size: 12, weight: .medium)).tint(theme.blue)
           .padding(.horizontal, 4)
           .animation(reduceMotion ? nil : .easeInOut(duration: 0.18), value: details)
       }
     } else {
-      OverviewGrid(expanded: expanded) {
-        DesignCard(theme: theme, padding: 19) { hero }
-        DesignCard(theme: theme) { detail }
-        DesignCard(theme: theme) { context }
+      OverviewGrid(expanded: expanded, condensed: condensed) {
+        DesignCard(theme: theme, padding: dense ? 12 : 19) { hero }
+        DesignCard(theme: theme, padding: dense ? 12 : 20) { detail }
+        DesignCard(theme: theme, padding: dense ? 12 : 20) { context }
       }
     }
   }
