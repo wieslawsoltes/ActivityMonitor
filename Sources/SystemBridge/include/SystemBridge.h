@@ -6,3 +6,5 @@ void am_system(AMSystem *output);
 typedef struct { int vmAccessible; uint64_t purgeable, compressed; } AMMemoryDetails;
 void am_memory_details(int32_t pid, AMMemoryDetails *output);
 #include "ProcessDiagnostics.h"
+
+#include "CPUDetails.h"

@@ -74,6 +74,7 @@ struct Snapshot {
   var processes: [ProcessRow]
   var system: AMSystem
   var gpuDevices: [GPUDeviceSample] = []
+  var cpuCores = CPUCoreSample()
 }
 func bytes(_ value: UInt64) -> String {
   // Formatters are expensive to construct and must not be shared across threads.
@@ -102,6 +103,7 @@ final class Collector: @unchecked Sendable {
   private var users: [UInt32: String] = [:]
   private let gpuReader = GPUHardwareReader()
   private var gpuTracker = GPUProcessTracker()
+  private var cpuTracker = CPUCoreTracker()
   private let detailsCollector = ProcessDetailsCollector()
   func collect(details: Bool = false) -> Snapshot {
     let now = Date()
@@ -154,7 +156,8 @@ final class Collector: @unchecked Sendable {
     time = now
     var system = AMSystem()
     am_system(&system)
-    return Snapshot(processes: rows, system: system, gpuDevices: gpu.devices)
+    return Snapshot(
+      processes: rows, system: system, gpuDevices: gpu.devices, cpuCores: cpuTracker.read())
   }
 }
 @MainActor final class Monitor: ObservableObject {
@@ -169,6 +172,10 @@ final class Collector: @unchecked Sendable {
   @Published var paused = false
   @Published var interval = 1.0
   @Published var lastUpdate: Date?
+  let cpuTopology = CPUTopology.current
+  @Published private(set) var cpuCores: [CPUUsageSeries] = []
+  @Published private(set) var cpuCoreStatus: String?
+  private var cpuCoreHistory = CPUHistoryStore()
   @Published var userCPU = 0.0
   @Published var systemCPU = 0.0
   @Published var readRate = 0.0
@@ -255,6 +262,13 @@ final class Collector: @unchecked Sendable {
     ProcessIconCache.retain(
       identities: Dictionary(uniqueKeysWithValues: rows.map { ($0.id, $0.start) }))
     system = snapshot.system
+    cpuCoreStatus = snapshot.cpuCores.status
+    if snapshot.cpuCores.readings.isEmpty {
+      cpuCoreHistory.unavailable(at: now)
+    } else {
+      cpuCoreHistory.append(snapshot.cpuCores.readings, at: now)
+    }
+    cpuCores = cpuCoreHistory.series
     updateGPU(snapshot.gpuDevices, date: now)
     let used = Double(system.active + system.wired + system.compressed)
     let values: [(Metric, Double, Double)] = [
