@@ -169,13 +169,18 @@ struct UpdatingProcessTableHarness: View {
       let scroll = try XCTUnwrap(anchor.enclosingScrollView)
       let document = try XCTUnwrap(scroll.documentView)
       XCTAssertGreaterThan(document.bounds.width, scroll.contentView.bounds.width)
+      // Compare rendered colors in the same bitmap color space, including the
+      // display profile, rather than comparing with unrendered sRGB components.
+      let reference = try bitmap(host)
+      let scale = CGFloat(reference.pixelsWide) / 420
+      let expected = try XCTUnwrap(
+        reference.colorAt(x: Int(20 * scale), y: Int(80 * scale))?.usingColorSpace(.sRGB))
       scroll.contentView.scroll(
         to: CGPoint(x: document.bounds.width - scroll.contentView.bounds.width, y: 4007))
       scroll.reflectScrolledClipView(scroll.contentView)
       try await settle(host)
       let image = try bitmap(host)
-      let scale = CGFloat(image.pixelsWide) / 420
-      let expected = try XCTUnwrap(NSColor(MonitorTheme(dark: dark).subtle).usingColorSpace(.sRGB))
+
       for x in stride(from: 20, through: 380, by: 20) {
         let color = try XCTUnwrap(
           image.colorAt(x: Int(CGFloat(x) * scale), y: Int(80 * scale))?.usingColorSpace(.sRGB))
