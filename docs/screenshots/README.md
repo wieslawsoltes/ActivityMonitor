@@ -39,3 +39,11 @@ Captured from the 1.3 feature build on September 9, 2026 using real system data.
 | Menu bar · Light | Menu bar · Dark |
 | --- | --- |
 | ![Light menu-bar monitor](adaptive/tray-light.jpg) | ![Dark menu-bar monitor](adaptive/tray-dark.jpg) |
+
+## Version 1.4 process lists
+
+Compact column sizing with application display names, live process data, and hidden-by-default additional columns.
+
+| Light | Dark |
+| :---: | :---: |
+| ![CPU process list in light appearance](v1.4/cpu-light.jpg) | ![CPU process list in dark appearance](v1.4/cpu-dark.jpg) |

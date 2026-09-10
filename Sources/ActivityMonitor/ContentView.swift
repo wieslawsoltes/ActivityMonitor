@@ -13,10 +13,12 @@ struct ContentView: View {
   @State var query = ""
   @State var filter = "All processes"
   @State var selection: Int32?
+  @State var selectedIDs: Set<Int32> = []
+  @State private var selectionFilterIDs: Set<Int32> = []
   @State var inspector = false
   @State var sort = "primary"
   @State var descending = true
-  @State var stopTarget: ProcessRow?
+  @State var stopTargets: [ProcessRow] = []
   @State var showHelp = false
   @State var showGallery = false
   @State var sampling = false
@@ -33,7 +35,9 @@ struct ContentView: View {
     filtered = processQuery.apply(rows ?? monitor.rows)
   }
   private var processQuery: ProcessQuery {
-    ProcessQuery(metric: metric, query: query, filter: filter, sort: sort, descending: descending)
+    ProcessQuery(
+      metric: metric, query: query, filter: filter, sort: sort, descending: descending,
+      selected: selectionFilterIDs)
   }
   private func selectMetric(_ value: Metric) {
     metric = value
@@ -133,20 +137,27 @@ struct ContentView: View {
       .onReceive(monitor.$rows) { rows in
         refreshPresentation(rows)
       }
+      .onChange(of: filter) {
+        if filter == "Selected processes" {
+          selectionFilterIDs = selectedIDs
+          refreshPresentation()
+        }
+      }
       .onChange(of: processQuery) { refreshPresentation() }
       .preferredColorScheme(appearance == "Dark" ? .dark : appearance == "Light" ? .light : nil)
       .alert(
-        "Stop \(stopTarget?.name ?? "process")?",
-        isPresented: Binding(get: { stopTarget != nil }, set: { if !$0 { stopTarget = nil } })
+        stopTargets.count == 1
+          ? "Stop \(stopTargets[0].name)?" : "Stop \(stopTargets.count) processes?",
+        isPresented: Binding(get: { !stopTargets.isEmpty }, set: { if !$0 { stopTargets = [] } })
       ) {
-        Button("Cancel", role: .cancel) { stopTarget = nil }
+        Button("Cancel", role: .cancel) { stopTargets = [] }
         Button("Quit", role: .destructive) {
-          if let p = stopTarget { monitor.terminate(p, force: false) }
-          stopTarget = nil
+          for p in stopTargets { monitor.terminate(p, force: false) }
+          stopTargets = []
         }
         Button("Force Quit", role: .destructive) {
-          if let p = stopTarget { monitor.terminate(p, force: true) }
-          stopTarget = nil
+          for p in stopTargets { monitor.terminate(p, force: true) }
+          stopTargets = []
         }
       } message: {
         Text(
@@ -230,11 +241,13 @@ struct ContentView: View {
       HStack(spacing: 16) {
         MonitorProcessTable(
           rows: filtered, metric: metric, theme: theme, query: $query, filter: $filter,
-          selection: $selection, inspector: $inspector, sort: $sort, descending: $descending,
+          selection: $selection, selectedIDs: $selectedIDs, inspector: $inspector, sort: $sort,
+          descending: $descending,
           inspect: { p in
             selection = p.id
             inspector = true
-          }, stop: { stopTarget = $0 }, searchFocus: $searchFocused)
+          }, stop: { stopTargets = [$0] }, stopMany: { stopTargets = $0 },
+          searchFocus: $searchFocused)
         if inspector && layout.inlineInspector {
           inspectorPanel.frame(width: layout.inspectorWidth)
         }
@@ -244,7 +257,7 @@ struct ContentView: View {
   var inspectorPanel: some View {
     MonitorInspector(
       process: selected, theme: theme, busy: sampling, close: { inspector = false },
-      sample: sample, files: inspectFiles, reveal: reveal, stop: { stopTarget = $0 })
+      sample: sample, files: inspectFiles, reveal: reveal, stop: { stopTargets = [$0] })
   }
   @ViewBuilder func adaptiveTitlebar(_ layout: MonitorLayout) -> some View {
     if layout.width >= 1350 {

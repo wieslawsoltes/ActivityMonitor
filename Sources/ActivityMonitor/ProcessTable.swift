@@ -13,11 +13,13 @@ struct MonitorProcessTable: View {
   @Binding var query: String
   @Binding var filter: String
   @Binding var selection: Int32?
+  @Binding var selectedIDs: Set<Int32>
   @Binding var inspector: Bool
   @Binding var sort: String
   @Binding var descending: Bool
   let inspect: (ProcessRow) -> Void
   let stop: (ProcessRow) -> Void
+  let stopMany: ([ProcessRow]) -> Void
   let searchFocus: FocusState<Bool>.Binding
   @AppStorage("showThreads") var showThreads = true
   @AppStorage("showUser") var showUser = true
@@ -25,79 +27,53 @@ struct MonitorProcessTable: View {
   @FocusState var focused: Bool
   @State private var availableWidth: CGFloat = 1200
   @AppStorage("showAllProcessColumns") private var allColumnsVisible = false
+  @AppStorage("processColumnVisibility.v1") private var columnVisibility = "{}"
+  @AppStorage("processColumnWidths.v1") private var columnWidths = "{}"
+  @State private var draftWidths: [String: CGFloat] = [:]
+  @State private var viewportWidth: CGFloat?
+  @AppStorage("processColumnOrder.v1") private var columnOrder = "{}"
+  @State private var selectionAnchor: Int32?
+  @State private var selectedStarts: [Int32: UInt64] = [:]
+  @State private var collapsed: Set<Int32> = []
+  var hierarchy: Bool { filter == "All processes, hierarchically" }
+  var entries: [ProcessTreeEntry] {
+    hierarchy
+      ? ProcessHierarchy.entries(rows, collapsed: query.isEmpty ? collapsed : [])
+      : rows.map { ProcessTreeEntry(row: $0, depth: 0, hasChildren: false) }
+  }
+  var displayRows: [ProcessRow] { entries.map(\.row) }
+  var orderPreferences: ProcessColumnOrder { ProcessColumnOrder(columnOrder) }
+  var orderedKeys: [String] {
+    orderPreferences.ordered(["name"] + columns.map(\.id), metric: metric)
+  }
+  var selectedRows: [ProcessRow] { rows.filter { selectedIDs.contains($0.id) } }
+  var widthPreferences: ProcessColumnWidths {
+    var value = ProcessColumnWidths(columnWidths)
+    for (key, width) in draftWidths { value.set(key, metric: metric, width: width) }
+    return value
+  }
+  var preferences: ProcessColumnPreferences { ProcessColumnPreferences(columnVisibility) }
   var allColumns: [ProcessColumn] {
-    var values: [ProcessColumn]
-    switch metric {
-    case .gpu:
-      values = [
-        .init(id: "primary", title: "% GPU", weight: 0.85),
-        .init(id: "gpuTime", title: "GPU time", weight: 1.35),
-        .init(id: "cpu", title: "% CPU", weight: 0.8),
-        .init(id: "memory", title: "Memory", weight: 1.1),
-        .init(id: "kind", title: "Kind", weight: 0.8),
-        .init(id: "pid", title: "PID", weight: 0.8),
-        .init(id: "user", title: "User", weight: 1.1),
-      ]
-    case .cpu:
-      values = [
-        .init(id: "primary", title: "% CPU", weight: 0.85),
-        .init(id: "time", title: "CPU time", weight: 1.2),
-        .init(id: "threads", title: "Threads", weight: 0.8),
-        .init(id: "memory", title: "Memory", weight: 1.1),
-        .init(id: "kind", title: "Kind", weight: 0.8),
-        .init(id: "gpu", title: "% GPU", weight: 0.8), .init(id: "pid", title: "PID", weight: 0.8),
-        .init(id: "user", title: "User", weight: 1.1),
-      ]
-    case .memory:
-      values = [
-        .init(id: "primary", title: "Memory", weight: 1.1),
-        .init(id: "threads", title: "Threads", weight: 0.7),
-        .init(id: "ports", title: "Ports", weight: 0.7),
-        .init(id: "cpu", title: "% CPU", weight: 0.7),
-        .init(id: "kind", title: "Kind", weight: 0.7),
-        .init(id: "gpu", title: "% GPU", weight: 0.7),
-        .init(id: "resident", title: "Real memory", weight: 1.1),
-        .init(id: "pid", title: "PID", weight: 0.7), .init(id: "user", title: "User", weight: 1),
-      ]
-    case .energy:
-      values = [
-        .init(id: "primary", title: "CPU workload", weight: 1.1),
-        .init(id: "time", title: "CPU time", weight: 1.1),
-        .init(id: "nap", title: "App nap", weight: 1.1),
-        .init(id: "sleep", title: "Preventing sleep", weight: 1.1),
-        .init(id: "user", title: "User", weight: 1.2),
-      ]
-    case .disk:
-      values = [
-        .init(id: "primary", title: "Bytes written", weight: 1.4),
-        .init(id: "secondary", title: "Bytes read", weight: 1.4),
-        .init(id: "pid", title: "PID", weight: 0.8), .init(id: "user", title: "User", weight: 1.8),
-      ]
-    case .network:
-      values = [
-        .init(id: "received", title: "Received bytes", weight: 1.1),
-        .init(id: "sent", title: "Sent bytes", weight: 1.1),
-        .init(id: "packetsOut", title: "Sent packets", weight: 1),
-        .init(id: "packetsIn", title: "Received packets", weight: 1.2),
-        .init(id: "pid", title: "PID", weight: 0.7), .init(id: "user", title: "User", weight: 1.2),
-      ]
-    }
-    return values.filter {
-      ($0.id != "threads" || showThreads) && ($0.id != "user" || showUser)
-        && (!["time", "gpuTime"].contains($0.id) || showTime)
+    ProcessColumns.available(metric).filter {
+      preferences.isVisible(
+        $0.id, metric: metric, showTime: showTime,
+        showThreads: showThreads, showUser: showUser)
     }
   }
   var columns: [ProcessColumn] {
     guard availableWidth < 900, !allColumnsVisible else { return allColumns }
-    return ProcessColumnPolicy.visible(
-      allColumns, metric: metric, width: availableWidth, sort: sort)
-  }
-  var minTableWidth: CGFloat {
-    if availableWidth < 900 && !allColumnsVisible { return availableWidth < 520 ? 360 : 500 }
-    return metric == .disk ? 720 : metric == .energy ? 850 : 1000
+    let automatic = Set(
+      ProcessColumnPolicy.visible(
+        allColumns, metric: metric, width: availableWidth, sort: sort
+      ).map(\.id))
+    return allColumns.filter {
+      automatic.contains($0.id) || preferences.explicitlyEnabled(metric).contains($0.id)
+    }
   }
   var body: some View {
     GeometryReader { g in
+      let chosenRows = selectedRows
+      let canStopChosen = canStop
       let toolbarHeight: CGFloat = g.size.width >= 900 ? 61 : 76
       VStack(spacing: 0) {
         if g.size.width >= 900 {
@@ -106,48 +82,135 @@ struct MonitorProcessTable: View {
           compactToolbar.frame(height: toolbarHeight)
         }
         Rectangle().fill(theme.separator).frame(height: 1)
-        let width = max(minTableWidth, g.size.width)
-        ScrollView(.horizontal) {
-          VStack(spacing: 0) {
-            header(width).frame(height: 36).background(theme.subtle)
-            Rectangle().fill(theme.separator).frame(height: 1)
-            ScrollViewReader { proxy in
-              ScrollView(.vertical) {
-                LazyVStack(spacing: 0) {
-                  ForEach(Array(rows.enumerated()), id: \.element.id) { index, row in
-                    ProcessTableRow(
-                      row: row, index: index, width: width, metric: metric, theme: theme,
-                      columns: columns, isSelected: selection == row.id,
-                      select: {
-                        selection = row.id
-                        focused = true
-                      }, inspect: inspect, stop: stop
-                    ).equatable().id(row.id)
-                  }
-                  if rows.isEmpty { ContentUnavailableView.search(text: query).frame(height: 240) }
-                }
-              }.onChange(of: selection) { if let selection { proxy.scrollTo(selection) } }
-                .focusable().focusEffectDisabled().focused($focused)
-                .onKeyPress(.upArrow) {
-                  move(-1)
-                  return .handled
-                }.onKeyPress(.downArrow) {
-                  move(1)
-                  return .handled
-                }
-                .onKeyPress(.return) {
-                  if let p = rows.first(where: { $0.id == selection }) { inspect(p) }
-                  return .handled
-                }
-                .onKeyPress(.escape) {
-                  inspector = false
-                  return .handled
-                }
+        let fallback =
+          g.size.width
+          - (NSScroller.preferredScrollerStyle == .legacy
+            ? NSScroller.scrollerWidth(for: .regular, scrollerStyle: .legacy) : 0)
+        let layout = ProcessColumnLayout(
+          viewport: viewportWidth ?? fallback, metric: metric, columns: columns,
+          saved: widthPreferences, order: orderPreferences)
+        ScrollView([.horizontal, .vertical]) {
+          LazyVStack(spacing: 0, pinnedViews: [.sectionHeaders]) {
+            Section {
+              ForEach(Array(entries.enumerated()), id: \.element.id) { index, entry in
+                let row = entry.row
+                ProcessTableRow(
+                  row: row, index: index, layout: layout, metric: metric, theme: theme,
+                  columns: columns, selectedSet: selectedIDs, hierarchical: hierarchy,
+                  depth: entry.depth, hasChildren: entry.hasChildren,
+                  expanded: !collapsed.contains(row.id), toggleExpanded: { toggleExpanded(row.id) },
+                  isSelected: selectedIDs.contains(row.id),
+                  select: {
+                    selectRow(row.id)
+                  }, inspect: inspect, stop: stop,
+                  copy: { copyRows(selectedIDs.contains(row.id) ? chosenRows : [row]) },
+                  stopSelection: { stopMany(selectedIDs.contains(row.id) ? chosenRows : [row]) },
+                  canStopSelection: selectedIDs.contains(row.id)
+                    ? canStopChosen : row.uid == getuid() && row.id > 1 && row.id != getpid()
+                ).equatable().id(row.id)
+              }
+              if rows.isEmpty { ContentUnavailableView.search(text: query).frame(height: 240) }
+            } header: {
+              VStack(spacing: 0) {
+                header(layout).frame(height: 36)
+                Rectangle().fill(theme.separator).frame(height: 1)
+              }.background(theme.subtle)
             }
-          }.frame(width: width, height: max(100, g.size.height - toolbarHeight - 1))
-        }.scrollIndicators(.automatic)
+          }.frame(width: layout.total)
+            .background(ProcessTableViewport { viewportWidth = $0 })
+            .background(
+              ProcessTableSelectionScroll(
+                selectedID: selection, rowIndex: displayRows.firstIndex { $0.id == selection }))
+        }.defaultScrollAnchor(.topLeading)
+          .scrollIndicators(.automatic)
+          .focusable().focusEffectDisabled().focused($focused)
+          .onKeyPress(.upArrow, phases: .down) { press in
+            move(-1, extending: press.modifiers.contains(.shift))
+            return .handled
+          }
+          .onKeyPress(.downArrow, phases: .down) { press in
+            move(1, extending: press.modifiers.contains(.shift))
+            return .handled
+          }
+          .onKeyPress(.home, phases: .down) { press in
+            move(-displayRows.count, extending: press.modifiers.contains(.shift))
+            return .handled
+          }
+          .onKeyPress(.end, phases: .down) { press in
+            move(displayRows.count, extending: press.modifiers.contains(.shift))
+            return .handled
+          }
+          .onKeyPress(.pageUp, phases: .down) { press in
+            move(-max(1, Int(g.size.height / 41) - 3), extending: press.modifiers.contains(.shift))
+            return .handled
+          }
+          .onKeyPress(.pageDown, phases: .down) { press in
+            move(max(1, Int(g.size.height / 41) - 3), extending: press.modifiers.contains(.shift))
+            return .handled
+          }
+          .onKeyPress(.leftArrow) {
+            guard hierarchy, let selection else { return .ignored }
+            if !collapsed.contains(selection),
+              entries.first(where: { $0.id == selection })?.hasChildren == true
+            {
+              collapsed.insert(selection)
+            } else if let parent = rows.first(where: { $0.id == selection })?.parent,
+              rows.contains(where: { $0.id == parent })
+            {
+              selectRow(parent)
+            }
+            return .handled
+          }
+          .onKeyPress(.rightArrow) {
+            guard hierarchy, let selection else { return .ignored }
+            if collapsed.contains(selection) { collapsed.remove(selection) } else { move(1) }
+            return .handled
+          }
+          .onKeyPress(.return) {
+            if let p = rows.first(where: { $0.id == selection }) { inspect(p) }
+            return .handled
+          }
+          .onKeyPress(.escape) {
+            inspector = false
+            return .handled
+          }
+          .onCopyCommand {
+            guard !selectedRows.isEmpty else { return [] }
+            return [
+              NSItemProvider(
+                object: processClipboard(selectedRows, keys: orderedKeys, metric: metric)
+                  as NSString)
+            ]
+          }
+          .onCommand(#selector(NSText.selectAll(_:))) { selectAllRows() }
+          .onKeyPress { press in
+            if press.modifiers.contains(.command), press.characters.lowercased() == "a" {
+              selectAllRows()
+              return .handled
+            }
+            if press.modifiers.contains(.command), press.characters.lowercased() == "c" {
+              copyRows(selectedRows)
+              return .handled
+            }
+            return .ignored
+          }
           .onAppear { availableWidth = g.size.width }
+          .onChange(of: selection) {
+            if let selection, !selectedIDs.contains(selection) {
+              selectedIDs = [selection]
+              selectionAnchor = selection
+            }
+            rememberSelection()
+          }
+          .onChange(of: rows) {
+            let current = Dictionary(uniqueKeysWithValues: rows.map { ($0.id, $0.start) })
+            selectedIDs = selectedIDs.filter {
+              selectedStarts[$0] == nil || current[$0] == selectedStarts[$0]
+            }
+            if let selection, !selectedIDs.contains(selection) { self.selection = nil }
+          }
           .onChange(of: g.size.width) { availableWidth = g.size.width }
+          .onChange(of: metric) { draftWidths = [:] }
       }.background(theme.card).clipShape(
         UnevenRoundedRectangle(topLeadingRadius: 14, topTrailingRadius: 14)
       ).overlay(
@@ -160,13 +223,15 @@ struct MonitorProcessTable: View {
       Text(metric == .energy ? "Applications" : "Processes").font(
         .system(size: 13, weight: .semibold)
       ).foregroundStyle(theme.text)
-      Text(rows.count.formatted()).font(.system(size: 10)).foregroundStyle(theme.secondary).padding(
+      Text(selectedIDs.count > 1 ? "\(selectedIDs.count) selected" : rows.count.formatted()).font(
+        .system(size: 10)
+      ).foregroundStyle(theme.secondary).padding(
         .horizontal, 6
       ).padding(.vertical, 2).background(theme.subtle, in: RoundedRectangle(cornerRadius: 4))
         .overlay(RoundedRectangle(cornerRadius: 4).stroke(theme.border, lineWidth: 1))
       Spacer(minLength: 6)
       Menu {
-        ForEach(["All processes", "My processes", "System processes", "Applications"], id: \.self) {
+        ForEach(ProcessQuery.filters, id: \.self) {
           item in
           Button {
             filter = item
@@ -206,7 +271,7 @@ struct MonitorProcessTable: View {
         .leading, 8)
       Rectangle().fill(theme.border).frame(width: 1, height: 18).padding(.horizontal, 3)
       Button {
-        if let row = rows.first(where: { $0.id == selection }) { stop(row) }
+        if !selectedRows.isEmpty { stopMany(selectedRows) }
       } label: {
         Image(systemName: "xmark.octagon")
       }.buttonStyle(MonitorIconButton(theme: theme)).disabled(!canStop).help(
@@ -217,23 +282,79 @@ struct MonitorProcessTable: View {
         Image(systemName: "info.circle")
       }.buttonStyle(MonitorIconButton(theme: theme, active: inspector)).help("Process details")
       Menu {
-        Toggle(metric == .gpu ? "GPU time" : "CPU time", isOn: $showTime)
-        Toggle("Threads", isOn: $showThreads)
-        Toggle("User", isOn: $showUser)
-        Divider()
-        Button("Restore columns") {
-          showTime = true
-          showThreads = true
-          showUser = true
-        }
-        Divider()
-        Text("— means the metric is unavailable.")
+        columnMenu
       } label: {
         Image(systemName: "rectangle.split.3x1").font(.system(size: 13)).foregroundStyle(
           theme.secondary
         ).frame(width: 30, height: 32)
       }.menuStyle(.borderlessButton).menuIndicator(.hidden).fixedSize().help("Choose columns")
     }.padding(.horizontal, 18)
+  }
+  @ViewBuilder var columnMenu: some View {
+    Button("Select all processes") { selectAllRows() }
+    Button("Copy selected rows") { copyRows(selectedRows) }.disabled(selectedRows.isEmpty)
+    if hierarchy {
+      Button("Expand all processes") { collapsed = [] }
+      Button("Collapse all processes") { collapsed = Set(rows.map(\.id)) }
+    }
+    Divider()
+    Button("Reset column order") {
+      var value = orderPreferences
+      value.reset(metric)
+      columnOrder = value.json
+    }
+    Button("Fit all columns to contents") {
+      var value = ProcessColumnWidths(columnWidths)
+      value.set(
+        "name", metric: metric,
+        width: ProcessColumnLayout.fitted(
+          key: "name", title: "Process name", metric: metric, rows: rows))
+      for column in columns {
+        value.set(
+          column.id, metric: metric,
+          width: ProcessColumnLayout.fitted(
+            key: column.id, title: column.title, metric: metric, rows: rows))
+      }
+      columnWidths = value.json
+    }
+    Button("Reset column widths") {
+      var value = ProcessColumnWidths(columnWidths)
+      value.reset(metric)
+      columnWidths = value.json
+      draftWidths = [:]
+    }
+    Toggle("Show all enabled columns at narrow widths", isOn: $allColumnsVisible)
+    Divider()
+    ForEach(ProcessColumns.available(metric)) { column in
+      Toggle(
+        column.title,
+        isOn: Binding(
+          get: {
+            preferences.isVisible(
+              column.id, metric: metric, showTime: showTime,
+              showThreads: showThreads, showUser: showUser)
+          },
+          set: { enabled in
+            var value = preferences
+            value.set(column.id, metric: metric, visible: enabled)
+            columnVisibility = value.json
+            if !enabled && sort == column.id {
+              sort = metric == .network ? "received" : "primary"
+            }
+          }
+        )
+      ).help(ProcessColumns.unavailableReason(column.id) ?? "Show or hide \(column.title)")
+    }
+    Divider()
+    Button("Restore columns") {
+      var value = preferences
+      value.restore(metric)
+      columnVisibility = value.json
+      allColumnsVisible = false
+      sort = metric == .network ? "received" : "primary"
+      descending = true
+    }
+    Text("— means the metric is unavailable.")
   }
   var compactToolbar: some View {
     VStack(spacing: 8) {
@@ -243,7 +364,7 @@ struct MonitorProcessTable: View {
         Menu {
           Picker("Process filter", selection: $filter) {
             ForEach(
-              ["All processes", "My processes", "System processes", "Applications"], id: \.self
+              ProcessQuery.filters, id: \.self
             ) { Text($0).tag($0) }
           }
         } label: {
@@ -268,16 +389,7 @@ struct MonitorProcessTable: View {
         }
         .menuStyle(.borderlessButton).fixedSize().help("Sort processes")
         Menu {
-          Toggle("Show all columns", isOn: $allColumnsVisible)
-          Toggle(metric == .gpu ? "GPU time" : "CPU time", isOn: $showTime)
-          Toggle("Threads", isOn: $showThreads)
-          Toggle("User", isOn: $showUser)
-          Button("Restore columns") {
-            allColumnsVisible = false
-            showTime = true
-            showThreads = true
-            showUser = true
-          }
+          columnMenu
         } label: {
           Image(systemName: "rectangle.split.3x1")
         }
@@ -300,7 +412,7 @@ struct MonitorProcessTable: View {
             RoundedRectangle(cornerRadius: 6).stroke(
               searchFocus.wrappedValue ? theme.blue : theme.border, lineWidth: 1))
         Button {
-          if let row = rows.first(where: { $0.id == selection }) { stop(row) }
+          if !selectedRows.isEmpty { stopMany(selectedRows) }
         } label: {
           Image(systemName: "xmark.octagon")
         }
@@ -316,26 +428,73 @@ struct MonitorProcessTable: View {
     }.padding(.horizontal, 14)
   }
   var canStop: Bool {
-    guard let row = rows.first(where: { $0.id == selection }) else { return false }
-    return row.uid == getuid() && row.id > 1 && row.id != getpid()
+    !selectedRows.isEmpty
+      && selectedRows.allSatisfy { $0.uid == getuid() && $0.id > 1 && $0.id != getpid() }
   }
-  func nameWidth(_ width: CGFloat) -> CGFloat {
-    width < 900
-      ? width * (width < 520 ? 0.48 : 0.34)
-      : metric == .disk ? width * 0.39 : metric == .energy ? width * 0.30 : width * 0.27
+  func moveColumn(_ key: String, to target: String) {
+    var value = orderPreferences
+    value.move(key, to: target, metric: metric)
+    columnOrder = value.json
   }
-  func cellWidth(_ column: ProcessColumn, _ width: CGFloat) -> CGFloat {
-    (width - nameWidth(width)) * column.weight / columns.reduce(0) { $0 + $1.weight }
-  }
-  func header(_ width: CGFloat) -> some View {
-    HStack(spacing: 0) {
-      headerButton(metric == .energy ? "App name" : "Process name", "name", alignment: .leading)
-        .frame(width: nameWidth(width))
-      ForEach(columns) { c in
-        headerButton(c.title, c.id, alignment: c.id == "user" ? .leading : .trailing).frame(
-          width: cellWidth(c, width))
-      }
+  func resizeColumn(_ key: String, width: CGFloat, finished: Bool) {
+    var value = widthPreferences
+    value.resize(
+      key, metric: metric, columns: columns, viewport: viewportWidth ?? availableWidth, to: width)
+    if finished {
+      columnWidths = value.json
+      draftWidths = [:]
+    } else {
+      if let name = value.width("name", metric: metric) { draftWidths["name"] = name }
+      draftWidths[key] = value.width(key, metric: metric)
     }
+  }
+  func resetColumnWidth(_ key: String) {
+    var value = ProcessColumnWidths(columnWidths)
+    value.set(key, metric: metric, width: nil)
+    columnWidths = value.json
+  }
+  func resizeHandle(_ key: String, title: String, width: CGFloat) -> some View {
+    ProcessColumnResizeHandle(
+      title: title, width: width, theme: theme,
+      resize: { resizeColumn(key, width: $0, finished: $1) },
+      fit: {
+        resizeColumn(
+          key,
+          width: ProcessColumnLayout.fitted(key: key, title: title, metric: metric, rows: rows),
+          finished: true)
+      },
+      reset: { resetColumnWidth(key) })
+  }
+  func header(_ layout: ProcessColumnLayout) -> some View {
+    HStack(spacing: 0) {
+      ForEach(layout.order, id: \.self) { key in
+        let title =
+          key == "name"
+          ? (metric == .energy ? "App name" : "Process name")
+          : columns.first { $0.id == key }?.title ?? key
+        let width = layout.width(key)
+        headerButton(title, key, alignment: key == "user" || key == "name" ? .leading : .trailing)
+          .frame(width: width)
+          .modifier(ProcessHeaderReorder(key: key, layout: layout, move: moveColumn))
+          .contextMenu {
+            Button("Fit column to contents") {
+              resizeColumn(
+                key,
+                width: ProcessColumnLayout.fitted(
+                  key: key, title: title, metric: metric, rows: rows), finished: true)
+            }
+            Button("Reset column width") { resetColumnWidth(key) }
+            if let index = layout.order.firstIndex(of: key) {
+              Button("Move column left") { moveColumn(key, to: layout.order[index - 1]) }.disabled(
+                index == 0)
+              Button("Move column right") { moveColumn(key, to: layout.order[index + 1]) }.disabled(
+                index == layout.order.count - 1)
+            }
+          }
+          .overlay(alignment: .trailing) { resizeHandle(key, title: title, width: width) }
+      }
+      Spacer(minLength: 0)
+    }.frame(width: layout.total)
   }
   func headerButton(_ title: String, _ key: String, alignment: Alignment) -> some View {
     Button {
@@ -347,7 +506,7 @@ struct MonitorProcessTable: View {
       }
     } label: {
       HStack(spacing: 5) {
-        Text(title)
+        Text(title).lineLimit(1)
         if sort == key {
           Image(systemName: descending ? "chevron.down" : "chevron.up").font(.system(size: 7))
         }
@@ -357,7 +516,7 @@ struct MonitorProcessTable: View {
         .frame(height: 36).contentShape(Rectangle())
     }.buttonStyle(MonitorSegmentButton(theme: theme, radius: 0)).help(
       unavailableColumn(key)
-        ? "This metric is not exposed by public macOS APIs."
+        ? ProcessColumns.unavailableReason(key)!
         : key == "gpuTime"
           ? "Sort by GPU execution time observed during this session"
           : key == "gpu" || (key == "primary" && metric == .gpu)
@@ -368,51 +527,106 @@ struct MonitorProcessTable: View {
     ).disabled(unavailableColumn(key))
   }
   func unavailableColumn(_ key: String) -> Bool {
-    ["ports", "nap", "sleep", "packetsIn", "packetsOut"].contains(key)
+    ProcessColumns.unavailableReason(key) != nil
   }
-  func move(_ delta: Int) {
-    guard !rows.isEmpty else { return }
-    let index = rows.firstIndex { $0.id == selection } ?? (delta > 0 ? -1 : rows.count)
-    selection = rows[min(max(index + delta, 0), rows.count - 1)].id
+  func toggleExpanded(_ id: Int32) {
+    if collapsed.contains(id) { collapsed.remove(id) } else { collapsed.insert(id) }
   }
+  func rememberSelection() {
+    selectedStarts = Dictionary(
+      uniqueKeysWithValues: rows.filter { selectedIDs.contains($0.id) }.map { ($0.id, $0.start) })
+  }
+  func selectRow(_ id: Int32) {
+    var value = ProcessListSelection(ids: selectedIDs, anchor: selectionAnchor, lead: selection)
+    let modifiers = NSApp.currentEvent?.modifierFlags ?? NSEvent.modifierFlags
+    value.select(
+      id, order: displayRows.map(\.id), extending: modifiers.contains(.shift),
+      toggling: modifiers.contains(.command))
+    applySelection(value)
+    focused = true
+  }
+  func applySelection(_ value: ProcessListSelection) {
+    selectedIDs = value.ids
+    selectionAnchor = value.anchor
+    selection = value.lead
+    rememberSelection()
+  }
+  func move(_ delta: Int, extending: Bool = false) {
+    var value = ProcessListSelection(ids: selectedIDs, anchor: selectionAnchor, lead: selection)
+    value.move(delta, order: displayRows.map(\.id), extending: extending)
+    applySelection(value)
+  }
+  func selectAllRows() {
+    selectedIDs = Set(displayRows.map(\.id))
+    if selection == nil { selection = rows.first?.id }
+    selectionAnchor = displayRows.first?.id
+    rememberSelection()
+  }
+  func copyRows(_ values: [ProcessRow]) {
+    guard !values.isEmpty else { return }
+    NSPasteboard.general.clearContents()
+    NSPasteboard.general.setString(
+      processClipboard(values, keys: orderedKeys, metric: metric), forType: .string)
+  }
+
 }
 
 private struct ProcessTableRow: View, Equatable {
   let row: ProcessRow
   let index: Int
-  let width: CGFloat
+  let layout: ProcessColumnLayout
   let metric: Metric
   let theme: MonitorTheme
   let columns: [ProcessColumn]
+  let selectedSet: Set<Int32>
+  let hierarchical: Bool
+  let depth: Int
+  let hasChildren: Bool
+  let expanded: Bool
+  let toggleExpanded: () -> Void
   let isSelected: Bool
   let select: () -> Void
   let inspect: (ProcessRow) -> Void
   let stop: (ProcessRow) -> Void
+  let copy: () -> Void
+  let stopSelection: () -> Void
+  let canStopSelection: Bool
   @State private var hovered = false
   static func == (lhs: Self, rhs: Self) -> Bool {
-    lhs.row == rhs.row && lhs.index == rhs.index && lhs.width == rhs.width
+    lhs.row == rhs.row && lhs.index == rhs.index && lhs.layout == rhs.layout
       && lhs.metric == rhs.metric && lhs.theme.dark == rhs.theme.dark
       && lhs.columns == rhs.columns && lhs.isSelected == rhs.isSelected
-  }
-  func nameWidth(_ width: CGFloat) -> CGFloat {
-    width < 900
-      ? width * (width < 520 ? 0.48 : 0.34)
-      : metric == .disk ? width * 0.39 : metric == .energy ? width * 0.30 : width * 0.27
-  }
-  func cellWidth(_ column: ProcessColumn, _ width: CGFloat) -> CGFloat {
-    (width - nameWidth(width)) * column.weight / columns.reduce(0) { $0 + $1.weight }
+      && lhs.hierarchical == rhs.hierarchical && lhs.selectedSet == rhs.selectedSet
+      && lhs.depth == rhs.depth && lhs.hasChildren == rhs.hasChildren
+      && lhs.expanded == rhs.expanded && lhs.canStopSelection == rhs.canStopSelection
   }
   var body: some View {
     Button {
       select()
     } label: {
-      HStack(spacing: 0) {
+      ZStack(alignment: .leading) {
+        metricCells.frame(width: layout.total, height: 41)
         HStack(spacing: 10) {
+          if hierarchical {
+            if hasChildren {
+              Image(systemName: expanded ? "chevron.down" : "chevron.right").font(
+                .system(size: 9, weight: .semibold)
+              )
+              .frame(width: 12, height: 30).contentShape(Rectangle()).onTapGesture(
+                perform: toggleExpanded
+              )
+              .accessibilityLabel(expanded ? "Collapse process" : "Expand process")
+            } else {
+              Color.clear.frame(width: 12, height: 30)
+            }
+          }
           ProcessIcon(pid: row.id, isApp: row.isApp, start: row.start).frame(width: 24, height: 24)
           Text(row.name).font(.system(size: 12)).foregroundStyle(theme.text).lineLimit(1)
             .truncationMode(.middle)
-        }.padding(.horizontal, 17).frame(width: nameWidth(width), alignment: .leading)
-        metricCells.frame(width: width - nameWidth(width), height: 41)
+        }.padding(.leading, 17 + (hierarchical ? CGFloat(min(depth, 12)) * 12 : 0)).padding(
+          .trailing, 17
+        ).frame(width: layout.name, alignment: .leading)
+          .offset(x: layout.offset("name"))
       }.frame(height: 41).background(
         isSelected
           ? theme.selected
@@ -421,34 +635,53 @@ private struct ProcessTableRow: View, Equatable {
         if isSelected { Rectangle().fill(theme.blue).frame(width: 2) }
       }.overlay(alignment: .bottom) { Rectangle().fill(theme.separator).frame(height: 1) }
         .contentShape(Rectangle())
-    }.buttonStyle(.plain).focusEffectDisabled().onHover { hovered = $0 }.help(
-      row.name + "\n" + row.gpuAvailability
-    )
-    .simultaneousGesture(TapGesture(count: 2).onEnded { inspect(row) }).contextMenu {
-      Button("Inspect") { inspect(row) }
-      Button("Copy PID") {
-        NSPasteboard.general.clearContents()
-        NSPasteboard.general.setString(String(row.id), forType: .string)
+    }.buttonStyle(.plain).focusEffectDisabled().onHover { hovered = $0 }.help(rowHelp)
+      .simultaneousGesture(TapGesture(count: 2).onEnded { inspect(row) }).contextMenu {
+        Button("Inspect") { inspect(row) }
+        Button("Copy selected rows", action: copy)
+        Button("Quit selected processes…", role: .destructive, action: stopSelection).disabled(
+          !canStopSelection)
+        Divider()
+        Button("Copy PID") {
+          NSPasteboard.general.clearContents()
+          NSPasteboard.general.setString(String(row.id), forType: .string)
+        }
+        Button("Quit…", role: .destructive) { stop(row) }.disabled(
+          row.uid != getuid() || row.id <= 1 || row.id == getpid())
+      }.accessibilityAddTraits(isSelected ? .isSelected : []).accessibilityLabel(
+        "\(row.name), PID \(row.id)"
+      ).accessibilityValue(accessibleValues)
+      .accessibilityAction(named: "Inspect") {
+        inspect(row)
       }
-      Button("Quit…", role: .destructive) { stop(row) }.disabled(
-        row.uid != getuid() || row.id <= 1 || row.id == getpid())
-    }.accessibilityLabel("\(row.name), PID \(row.id)").accessibilityValue(
-      columns.map { $0.title + ": " + text(row, $0.id) }.joined(separator: ", ")
-    ).accessibilityAction(named: "Inspect") {
-      inspect(row)
-    }
+  }
+  private var rowHelp: String {
+    [row.name, row.executableName.map { "Executable: " + $0 }, row.gpuAvailability]
+      .compactMap { $0 }.joined(separator: "\n")
+  }
+  private var accessibleValues: String {
+    columns.map { column in
+      column.title + ": " + ProcessValues.text(row, key: column.id, metric: metric)
+    }.joined(separator: ", ")
   }
   private var metricCells: some View {
     Canvas { context, size in
       var x: CGFloat = 0
-      let total = columns.reduce(0) { $0 + $1.weight }
-      for column in columns {
-        let cellWidth = size.width * column.weight / max(1, total)
+      for key in layout.order {
+        let cellWidth = layout.width(key)
+        guard let column = columns.first(where: { $0.id == key }) else {
+          x += cellWidth
+          continue
+        }
         let primary = column.id == "primary" || metric == .network && column.id == "received"
         let highlighted =
           column.id == "primary" && (metric == .cpu || metric == .memory || metric == .gpu)
         let color = highlighted ? theme.blue : primary ? theme.text : theme.secondary
-        let label = Text(text(row, column.id))
+        let cellText = ProcessCellText.truncate(
+          text(row, column.id), width: cellWidth - (highlighted ? 46 : 32),
+          font: .monospacedDigitSystemFont(
+            ofSize: column.id == "user" ? 11 : 12, weight: primary ? .medium : .regular))
+        let label = Text(cellText)
           .font(
             .system(size: column.id == "user" ? 11 : 12, weight: primary ? .medium : .regular)
               .monospacedDigit()
@@ -478,27 +711,7 @@ private struct ProcessTableRow: View, Equatable {
     }.accessibilityHidden(true)
   }
   func text(_ p: ProcessRow, _ key: String) -> String {
-    switch key {
-    case "primary":
-      if metric == .gpu { return gpuPercent(p.gpuPercent) }
-      if metric == .disk { return p.ioAccessible ? bytes(p.written) : "—" }
-      return !p.accessible
-        ? "—" : metric == .memory ? bytes(p.memory) : String(format: "%.1f", p.cpu)
-    case "gpu": return gpuPercent(p.gpuPercent)
-    case "gpuTime": return gpuDuration(p.gpuTime)
-    case "secondary": return p.ioAccessible ? bytes(p.read) : "—"
-    case "cpu": return p.accessible ? String(format: "%.1f", p.cpu) : "—"
-    case "time": return p.accessible ? duration(p.cpuTime) : "—"
-    case "memory": return p.accessible ? bytes(p.memory) : "—"
-    case "resident": return p.accessible ? bytes(p.resident) : "—"
-    case "threads": return p.accessible ? String(p.threads) : "—"
-    case "received": return p.networkReceived.map(bytes) ?? "—"
-    case "sent": return p.networkSent.map(bytes) ?? "—"
-    case "kind": return p.kind
-    case "pid": return String(p.id)
-    case "user": return p.user
-    default: return "—"
-    }
+    ProcessValues.text(p, key: key, metric: metric)
   }
 }
 

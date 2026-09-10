@@ -54,6 +54,8 @@ struct ProcessRow: Identifiable, Codable, Equatable {
   var ioAccessible: Bool
   var gpuPercent: Double? = nil
   var gpuTime: Double? = nil
+  var details = ProcessDetails()
+  var executableName: String? = nil
   var gpuWaiting = false
   var gpuAvailability: String {
     gpuPercent != nil
@@ -91,7 +93,8 @@ final class Collector: @unchecked Sendable {
   private var users: [UInt32: String] = [:]
   private let gpuReader = GPUHardwareReader()
   private var gpuTracker = GPUProcessTracker()
-  func collect() -> Snapshot {
+  private let detailsCollector = ProcessDetailsCollector()
+  func collect(details: Bool = false) -> Snapshot {
     let now = Date()
     let elapsed = max(now.timeIntervalSince(time), 0.001)
     var buffer = [AMProcess](repeating: AMProcess(), count: max(256, Int(am_processes(nil, 0))))
@@ -111,6 +114,8 @@ final class Collector: @unchecked Sendable {
       gpu,
       identities: Dictionary(
         uniqueKeysWithValues: buffer.prefix(Int(count)).map { ($0.pid, $0.start) }))
+    let detailsByPID =
+      details ? detailsCollector.collect(Array(buffer.prefix(Int(count))), now: now) : [:]
     var next: [Int32: AMProcess] = [:]
     let rows = buffer.prefix(Int(count)).map { p -> ProcessRow in
       next[p.pid] = p
@@ -128,7 +133,7 @@ final class Collector: @unchecked Sendable {
         users[p.uid] = user
       }
       let networkCounters = network[p.pid].flatMap { $0.0 == p.start ? $0.1 : nil }
-      return ProcessRow(
+      var row = ProcessRow(
         id: p.pid, parent: p.ppid, uid: p.uid, start: p.start, name: name, user: user, cpu: cpu,
         cpuTime: Double(p.cpu) / 1e9, memory: p.footprint > 0 ? p.footprint : p.resident,
         resident: p.resident, threads: p.threads, read: p.read, written: p.written, isApp: false,
@@ -136,6 +141,13 @@ final class Collector: @unchecked Sendable {
         networkReceived: networkCounters?.received, networkSent: networkCounters?.sent,
         ioAccessible: p.ioAccessible != 0, gpuPercent: gpuProcesses[p.pid]?.percent,
         gpuTime: gpuProcesses[p.pid]?.seconds, gpuWaiting: gpuProcesses[p.pid]?.waiting ?? false)
+      row.executableName = name
+      row.details = detailsByPID[p.pid] ?? ProcessDetails()
+      row.details.packetsIn = networkCounters?.packetsIn
+      row.details.packetsOut = networkCounters?.packetsOut
+      row.details.wakeups = ProcessDetails.wakeupRate(
+        current: p, previous: previous, elapsed: elapsed)
+      return row
     }
     old = next
     time = now
@@ -187,7 +199,8 @@ final class Collector: @unchecked Sendable {
     refreshing = true
     defer { refreshing = false }
     let collector = self.collector
-    let snapshot = await Task.detached(priority: .utility) { collector.collect() }.value
+    let snapshot = await Task.detached(priority: .utility) { collector.collect(details: true) }
+      .value
     let now = Date()
     let dt = max(now.timeIntervalSince(previousDate ?? now), 0.001)
     if let prev = previous {
@@ -221,10 +234,14 @@ final class Collector: @unchecked Sendable {
     }
     readRate = Double(dr) / dt
     writeRate = Double(dw) / dt
+    applications.refreshIfNeeded()
     let apps = applications.regularProcesses
     rows = snapshot.processes.map {
       var p = $0
       p.isApp = apps.contains(p.id)
+      p.name = ProcessDisplayName.resolve(
+        executable: p.name,
+        application: applications.processStarts[p.id] == p.start ? applications.names[p.id] : nil)
       return p
     }
     system = snapshot.system
@@ -357,6 +374,12 @@ var nativeKind: String {
 /// Application membership changes on workspace events, not on every metric sample.
 @MainActor private final class ApplicationInventory {
   private(set) var regularProcesses: Set<Int32> = []
+  private(set) var names: [Int32: String] = [:]
+  private(set) var processStarts: [Int32: UInt64] = [:]
+  private var refreshed = Date.distantPast
+  func refreshIfNeeded() {
+    if Date().timeIntervalSince(refreshed) >= 5 { refresh() }
+  }
   private var observers: [NSObjectProtocol] = []
   init() {
     refresh()
@@ -373,9 +396,22 @@ var nativeKind: String {
     }
   }
   private func refresh() {
-    regularProcesses = Set(
-      NSWorkspace.shared.runningApplications
-        .filter { $0.activationPolicy == .regular }.map(\.processIdentifier))
+    let apps = NSWorkspace.shared.runningApplications.filter { !$0.isTerminated }
+    regularProcesses = Set(apps.filter { $0.activationPolicy == .regular }.map(\.processIdentifier))
+    names = Dictionary(
+      uniqueKeysWithValues: apps.compactMap { app in
+        app.localizedName.map { (app.processIdentifier, $0) }
+      })
+    processStarts = Dictionary(
+      uniqueKeysWithValues: apps.compactMap { app in
+        var info = proc_bsdinfo()
+        let size = Int32(MemoryLayout<proc_bsdinfo>.size)
+        guard proc_pidinfo(app.processIdentifier, PROC_PIDTBSDINFO, 0, &info, size) == size else {
+          return nil
+        }
+        return (app.processIdentifier, info.pbi_start_tvsec * 1_000_000 + info.pbi_start_tvusec)
+      })
+    refreshed = Date()
   }
   deinit {
     for observer in observers { NSWorkspace.shared.notificationCenter.removeObserver(observer) }

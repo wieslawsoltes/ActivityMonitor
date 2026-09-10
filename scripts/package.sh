@@ -1,7 +1,7 @@
 #!/bin/bash
 set -euo pipefail
 cd "$(dirname "$0")/.."
-VERSION="${VERSION:-1.3.3}"
+VERSION="${VERSION:-1.4.0}"
 [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "Expected numeric MAJOR.MINOR.PATCH version" >&2; exit 1; }
 if [[ -n "${NOTARY_PROFILE:-}" && "${SIGNING_IDENTITY:-}" != 'Developer ID Application:'* ]]; then
  echo 'Notarization requires a Developer ID Application signing identity.' >&2

@@ -38,7 +38,7 @@ int am_processes(AMProcess *out, int capacity) {
   }
   struct rusage_info_v4 r={0};
   if(proc_pid_rusage(p.pid,RUSAGE_INFO_V4,(rusage_info_t *)&r)==0) {
-   p.ioAccessible=1; p.footprint=r.ri_phys_footprint; p.read=r.ri_diskio_bytesread; p.written=r.ri_diskio_byteswritten;
+   p.wakeups=r.ri_interrupt_wkups; p.ioAccessible=1; p.footprint=r.ri_phys_footprint; p.read=r.ri_diskio_bytesread; p.written=r.ri_diskio_byteswritten;
   }
   out[n++]=p;
  }
@@ -75,4 +75,15 @@ void am_system(AMSystem *o) {
   free(network);
  }
  CFTypeRef power=IOPSCopyPowerSourcesInfo(); if(power) {CFArrayRef list=IOPSCopyPowerSourcesList(power);if(list){for(CFIndex i=0;i<CFArrayGetCount(list);i++){CFDictionaryRef d=IOPSGetPowerSourceDescription(power,CFArrayGetValueAtIndex(list,i));CFNumberRef current=CFDictionaryGetValue(d,CFSTR(kIOPSCurrentCapacityKey)), max=CFDictionaryGetValue(d,CFSTR(kIOPSMaxCapacityKey));int c=0,m=0;if(current&&max){CFNumberGetValue(current,kCFNumberIntType,&c);CFNumberGetValue(max,kCFNumberIntType,&m);if(m)o->battery=100*c/m;}o->charging=CFDictionaryGetValue(d,CFSTR(kIOPSIsChargingKey))==kCFBooleanTrue;CFStringRef state=CFDictionaryGetValue(d,CFSTR(kIOPSPowerSourceStateKey));o->externalPower=state&&CFEqual(state,CFSTR(kIOPSACPowerValue));}CFRelease(list);}CFRelease(power);}
+}
+// A task-name right exposes statistics without granting process control or memory reads.
+void am_memory_details(int32_t pid, AMMemoryDetails *out) {
+ memset(out, 0, sizeof(*out));
+ mach_port_t task = MACH_PORT_NULL;
+ if (task_name_for_pid(mach_task_self(), pid, &task) != KERN_SUCCESS) return;
+ task_vm_info_data_t vm = {0}; mach_msg_type_number_t count = TASK_VM_INFO_COUNT;
+ if (task_info(task, TASK_VM_INFO, (task_info_t)&vm, &count) == KERN_SUCCESS && count >= TASK_VM_INFO_REV0_COUNT) {
+  out->vmAccessible = 1; out->purgeable = vm.purgeable_volatile_resident; out->compressed = vm.compressed;
+ }
+ mach_port_deallocate(mach_task_self(), task);
 }
