@@ -10,6 +10,7 @@ struct MonitorInspector: View {
   let files: (ProcessRow) -> Void
   let reveal: (ProcessRow) -> Void
   let stop: (ProcessRow) -> Void
+  var diagnose: ((ProcessRow, Bool) -> Void)? = nil
   var body: some View {
     VStack(spacing: 0) {
       HStack {
@@ -67,6 +68,18 @@ struct MonitorInspector: View {
               }.font(.system(size: 10))
             }.padding(.top, 17)
             VStack(spacing: 8) {
+              if let diagnose {
+                Button {
+                  diagnose(p, false)
+                } label: {
+                  Label("Process diagnostics…", systemImage: "waveform.path.ecg.rectangle")
+                }
+                Button {
+                  diagnose(p, true)
+                } label: {
+                  Label("Open in tool window", systemImage: "arrow.up.forward.square")
+                }
+              }
               Button {
                 sample(p)
               } label: {

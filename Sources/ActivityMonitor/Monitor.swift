@@ -158,6 +158,7 @@ final class Collector: @unchecked Sendable {
   }
 }
 @MainActor final class Monitor: ObservableObject {
+  lazy var diagnostics = ProcessDiagnosticsCenter(monitor: self)
   @Published var rows: [ProcessRow] = []
   @Published var system = AMSystem()
   @Published var histories: [Metric: [Point]] = [:]

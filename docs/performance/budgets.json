@@ -50,6 +50,12 @@
     },
     "chart.GPU.15min": {
       "median_ms": 25
+    },
+    "diagnostics.workspace.15min": {
+      "median_ms": 400
+    },
+    "diagnostics.table.2500": {
+      "median_ms": 150
     }
   },
   "memory_growth_bytes": {

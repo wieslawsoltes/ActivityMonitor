@@ -14,7 +14,10 @@ struct TelemetrySample: Identifiable {
   var group: String { "\(series)-\(segment)" }
 }
 enum TelemetryData {
-  static func samples(points: [Point], metric: Metric, maximumGap: TimeInterval)
+  static func samples(
+    points: [Point], metric: Metric, maximumGap: TimeInterval,
+    logicalProcessors: Int = CPUAccounting.logicalProcessorCount
+  )
     -> [TelemetrySample]
   {
     var result: [TelemetrySample] = []
@@ -30,7 +33,8 @@ enum TelemetryData {
       }
       let first =
         metric == .cpu
-        ? point.a + point.b : metric == .memory ? (point.b == 4 ? 3 : point.b) : point.a
+        ? CPUAccounting.executionPercent(point.a + point.b, processors: logicalProcessors)
+        : metric == .memory ? (point.b == 4 ? 3 : point.b) : point.a
       guard first.isFinite, first >= 0 else {
         segment += 1
         continue
@@ -39,7 +43,10 @@ enum TelemetryData {
       if [.cpu, .disk, .network].contains(metric), point.b.isFinite, point.b >= 0 {
         result.append(
           TelemetrySample(
-            date: point.date, value: metric == .cpu ? point.b : -point.b, series: 1,
+            date: point.date,
+            value: metric == .cpu
+              ? CPUAccounting.executionPercent(point.b, processors: logicalProcessors) : -point.b,
+            series: 1,
             segment: segment))
       }
     }
@@ -54,8 +61,12 @@ enum TelemetryData {
       }
     }
   }
-  static func domain(_ samples: [TelemetrySample], metric: Metric) -> ClosedRange<Double> {
-    if metric == .cpu || metric == .gpu { return 0...100 }
+  static func domain(
+    _ samples: [TelemetrySample], metric: Metric,
+    logicalProcessors: Int = CPUAccounting.logicalProcessorCount
+  ) -> ClosedRange<Double> {
+    if metric == .cpu { return 0...CPUAccounting.capacity(processors: logicalProcessors) }
+    if metric == .gpu { return 0...100 }
     if metric == .memory { return 0...3 }
     let maximum = max(1, (samples.map { abs($0.value) }.max() ?? 1) * 1.15)
     return (metric == .disk || metric == .network ? -maximum : 0)...maximum
@@ -73,22 +84,32 @@ struct TelemetryChart: View {
   let range: Int
   let end: Date
   let theme: MonitorTheme
+  let perProcess: Bool
   @State private var selectedDate: Date?
   private var start: Date { end.addingTimeInterval(Double(-range * 60)) }
   private let traces: [TelemetryTrace]
   private let visible: [TelemetrySample]
   private let domain: ClosedRange<Double>
-  init(samples: [TelemetrySample], metric: Metric, range: Int, end: Date, theme: MonitorTheme) {
+  init(
+    samples: [TelemetrySample], metric: Metric, range: Int, end: Date, theme: MonitorTheme,
+    perProcess: Bool = false
+  ) {
     self.samples = samples
     self.metric = metric
     self.range = range
     self.end = end
     self.theme = theme
+    self.perProcess = perProcess
     let start = end.addingTimeInterval(Double(-range * 60))
     let visible = samples.filter { $0.date >= start && $0.date <= end }
     self.visible = visible
     self.traces = TelemetryTrace.make(visible)
-    self.domain = TelemetryData.domain(visible, metric: metric)
+    if perProcess {
+      let maximum = max(1, (visible.map { abs($0.value) }.max() ?? 1) * 1.15)
+      self.domain = (metric == .disk || metric == .network ? -maximum : 0)...maximum
+    } else {
+      self.domain = TelemetryData.domain(visible, metric: metric)
+    }
   }
   private var nearest: Date? { selectedDate.flatMap { TelemetryData.nearest($0, in: visible) } }
   private var selection: [TelemetrySample] {
@@ -96,24 +117,26 @@ struct TelemetryChart: View {
     return visible.filter { $0.date == date }
   }
   private func color(_ sample: TelemetrySample) -> Color {
-    metric == .memory
+    metric == .memory && !perProcess
       ? ((visible.last?.value ?? 1) >= 3
         ? theme.coral : (visible.last?.value ?? 1) >= 2 ? theme.amber : theme.green)
       : sample.series == 0 ? theme.blue : theme.coral
   }
   private func label(_ sample: TelemetrySample) -> String {
     switch metric {
-    case .cpu: return sample.series == 0 ? "Total" : "System"
-    case .memory: return "Pressure"
+    case .cpu: return sample.series == 0 ? (perProcess ? "Process" : "Total") : "System"
+    case .memory: return perProcess ? "Memory" : "Pressure"
     case .energy: return "CPU workload"
-    case .gpu: return "Device"
+    case .gpu: return perProcess ? "Process" : "Device"
     case .disk: return sample.series == 0 ? "Read" : "Write"
     case .network: return sample.series == 0 ? "In" : "Out"
     }
   }
   private func value(_ number: Double) -> String {
     switch metric {
-    case .memory: return number >= 3 ? "High" : number >= 2 ? "Moderate" : "Normal"
+    case .memory:
+      return perProcess
+        ? bytes(UInt64(max(0, number))) : number >= 3 ? "High" : number >= 2 ? "Moderate" : "Normal"
     case .disk, .network: return bytes(UInt64(max(0, abs(number)))) + "/s"
     default: return String(format: "%.1f%%", number)
     }
@@ -151,7 +174,7 @@ struct TelemetryChart: View {
     .chartYAxis {
       AxisMarks(
         position: .trailing,
-        values: metric == .memory
+        values: metric == .memory && !perProcess
           ? [1, 2, 3]
           : [domain.lowerBound, (domain.lowerBound + domain.upperBound) / 2, domain.upperBound]
       ) { axis in
@@ -231,7 +254,8 @@ struct TelemetryChart: View {
   }
   private var inspectionHint: String {
     "Hover to inspect. With macOS Keyboard navigation enabled, Tab to the chart and use left or right arrow keys to inspect samples."
-      + (metric == .cpu ? " " + CPUAccounting.systemHelp : "")
+      + (metric == .cpu
+        ? " " + (perProcess ? CPUAccounting.processHelp : CPUAccounting.systemHelp) : "")
   }
   private var latestValue: String {
     guard let latest = visible.last else { return "No readable samples" }
@@ -239,6 +263,7 @@ struct TelemetryChart: View {
       .joined(separator: ", ")
   }
   private func axisLabel(_ number: Double) -> String {
+    if metric == .memory && perProcess { return bytes(UInt64(max(0, number))) }
     if metric == .memory { return number >= 3 ? "High" : number >= 2 ? "Med" : "Low" }
     if metric == .disk || metric == .network {
       let parts = byteParts(UInt64(abs(number)))

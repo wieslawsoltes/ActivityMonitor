@@ -250,6 +250,45 @@ final class PerformanceTests: XCTestCase {
     report("table.scroll.layout.1000", milliseconds: scrollTimes)
     report("table.refresh.layout.1000", milliseconds: refreshTimes)
   }
+  #if !PERFORMANCE_BASELINE
+    @MainActor func testProcessDiagnosticsSurfaces() throws {
+      try enabled()
+      let monitor = PerformanceFixture.monitor()
+      var row = monitor.rows[0]
+      let session = ProcessDiagnosticSession(row: row)
+      session.tab = .cpu
+      for index in 0...900 {
+        row.cpu = 150 + sin(Double(index) / 20) * 60
+        session.accept(
+          rows: [row], date: PerformanceFixture.end.addingTimeInterval(Double(index - 900)))
+      }
+      session.range = 15
+      benchmark("diagnostics.workspace.15min", iterations: 3) {
+        render(
+          ProcessDiagnosticsView(
+            session: session, center: monitor.diagnostics, persistTableColumns: false, close: {}),
+          size: CGSize(width: 1060, height: 740))
+      }
+      let records = (0..<2500).map {
+        DiagnosticRecord(
+          id: String($0),
+          cells: [
+            "FD": String($0), "Type": "File",
+            "Path": "/Applications/Example.app/Contents/Resources/document-\($0).json",
+            "Size": "128 KB", "Access": "Available",
+          ], numbers: ["FD": Double($0)])
+      }
+      let section = DiagnosticSection(
+        columns: ["FD", "Type", "Path", "Size", "Access"], records: records, status: "2500 entries",
+        date: PerformanceFixture.end)
+      benchmark("diagnostics.table.2500", iterations: 3) {
+        render(
+          DiagnosticTable(
+            section: section, query: "", key: "benchmark", theme: .init(dark: false),
+            persistColumns: false), size: CGSize(width: 900, height: 550))
+      }
+    }
+  #endif
   @MainActor private var renderIndex = 0
   @MainActor private func render<V: View>(_ view: V, size: CGSize) {
     let host = NSHostingView(rootView: view)

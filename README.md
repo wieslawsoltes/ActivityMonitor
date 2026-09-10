@@ -15,7 +15,7 @@ Keep an eye on performance, understand resource usage, and find the processes th
 
 </div>
 
-![Activity Monitor in light appearance](docs/screenshots/v1.4/cpu-light.jpg)
+![Activity Monitor in light appearance](docs/screenshots/diagnostics/host-cpu-light.jpg)
 
 ## Six views. One clear picture.
 
@@ -32,17 +32,29 @@ Keep an eye on performance, understand resource usage, and find the processes th
 
 - **Find a process quickly.** Find apps by their macOS display names—including virtual machine names—or search by executable, PID or user. Choose from 28 column types in every view, with choices saved per view. Additional columns stay hidden until you enable them.
 - **Personal layouts.** Default columns fit the available width without unnecessary horizontal scrolling. Resize header dividers, double-click to fit contents, and drag columns into your preferred order. Each view remembers its widths, order and visible columns. Select ranges or multiple processes, copy rows, and explore parent/child process trees.
-- **Look closer.** Inspect a process, copy its PID, reveal its executable, view open files or capture a stack sample.
+- **Look closer.** Open a process workspace with activity histories, threads, files, connections, ports, memory maps and diagnostic reports. Detach it into a floating tool window or pin the process to the menu bar.
 - **Take action.** Quit or force quit your processes, with confirmation before termination.
 - **Follow changes.** Switch between one-, five- and fifteen-minute histories, adjust the refresh interval or pause the view.
 - **Keep a record.** Export process data as CSV or JSON and save diagnostic reports.
 - **Stay informed.** Open all six views from your menu bar, with live charts, device details and the busiest processes.
 
+## A workspace for each process
+
+Right-click a process and choose **Process diagnostics…**. Follow its CPU, memory, energy, disk, network and GPU activity, then inspect individual threads, open files, listening ports and memory mappings. Resize and reorder columns, filter entries, copy rows, and export the details you need.
+
+Keep several process monitors open as independent tool windows, float one above your workspace, or pin a process to the menu bar with your preferred live metric. Collect stack samples, virtual-memory reports, launch arguments and code-signing details without leaving the process workspace.
+
+| Process workspace · Light | Process workspace · Dark |
+| :---: | :---: |
+| ![Process CPU diagnostics in light appearance](docs/screenshots/diagnostics/cpu-light.jpg) | ![Process CPU diagnostics in dark appearance](docs/screenshots/diagnostics/cpu-dark.jpg) |
+
+[Explore process diagnostics](docs/diagnostics/README.md).
+
 ## Comfortable in any light
 
 Choose light, dark or system appearance. The process inspector sits beside wide workspaces and opens over compact windows.
 
-![Activity Monitor in dark appearance](docs/screenshots/v1.4/cpu-dark.jpg)
+![Activity Monitor in dark appearance](docs/screenshots/diagnostics/host-cpu-dark.jpg)
 
 *Screenshots show the running app with real system data.*
 
@@ -113,7 +125,7 @@ The toolbar export button saves the current filtered and sorted list.
 
 No accounts, telemetry or uploads. Reports and exports are saved to a location you choose. No administrator helper is installed.
 
-The CPU overview measures total capacity on a 0–100% scale. Process CPU percentages use 100% per logical processor and can exceed 100%.
+The CPU overview and process list use 100% per logical processor. The total, breakdown, and chart scale to the full machine capacity: 400% for four logical processors or 1600% for sixteen.
 
 macOS restricts some process information; unavailable values appear as **—**. The Energy view shows **CPU workload**, not Apple’s proprietary Energy Impact score. GPU counters appear where the graphics driver exposes them. App Nap, Sudden Termination and Apple’s Energy Impact score display **—** when selected. [Column details and availability](docs/process-columns.md) explain each measurement. Disk totals cover readable processes; network totals can differ from individual process counters. Histories begin at launch and stay in memory for up to fifteen minutes.
 

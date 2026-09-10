@@ -21,6 +21,7 @@ struct MonitorProcessTable: View {
   let stop: (ProcessRow) -> Void
   let stopMany: ([ProcessRow]) -> Void
   let searchFocus: FocusState<Bool>.Binding
+  var diagnose: ((ProcessRow, Bool) -> Void)? = nil
   @AppStorage("showThreads") var showThreads = true
   @AppStorage("showUser") var showUser = true
   @AppStorage("showTime") var showTime = true
@@ -115,7 +116,8 @@ struct MonitorProcessTable: View {
               copy: { copyRows(selectedIDs.contains(row.id) ? chosenRows : [row]) },
               stopSelection: { stopMany(selectedIDs.contains(row.id) ? chosenRows : [row]) },
               canStopSelection: selectedIDs.contains(row.id)
-                ? canStopChosen : row.uid == getuid() && row.id > 1 && row.id != getpid()
+                ? canStopChosen : row.uid == getuid() && row.id > 1 && row.id != getpid(),
+              diagnose: diagnose
             ).equatable().id(row.id)
           }.frame(width: layout.total)
             .background(
@@ -603,6 +605,7 @@ private struct ProcessTableRow: View, Equatable {
   let copy: () -> Void
   let stopSelection: () -> Void
   let canStopSelection: Bool
+  var diagnose: ((ProcessRow, Bool) -> Void)? = nil
   @State private var hovered = false
   static func == (lhs: Self, rhs: Self) -> Bool {
     lhs.row == rhs.row && lhs.index == rhs.index && lhs.layout == rhs.layout
@@ -650,6 +653,10 @@ private struct ProcessTableRow: View, Equatable {
     }.buttonStyle(.plain).focusEffectDisabled().onHover { hovered = $0 }.help(rowHelp)
       .simultaneousGesture(TapGesture(count: 2).onEnded { inspect(row) }).contextMenu {
         Button("Inspect") { inspect(row) }
+        if let diagnose {
+          Button("Process diagnostics…") { diagnose(row, false) }
+          Button("Open in tool window") { diagnose(row, true) }
+        }
         Button("Copy selected rows", action: copy)
         Button("Quit selected processes…", role: .destructive, action: stopSelection).disabled(
           !canStopSelection)

@@ -1,12 +1,26 @@
 import Foundation
 import SystemBridge
 
-/// System capacity and process execution time intentionally use different percentage scales.
+/// Host ticks are stored normalized; presentation uses 100% per logical processor.
 enum CPUAccounting {
   static let systemHelp =
-    "Total CPU capacity across all logical processors. User + System + Idle = 100%. Process percentages use a different scale: 100% is one logical processor."
+    "CPU execution time: 100% is one logical processor. Total, User, System, and Idle use the same scale as process CPU. Full capacity is 100% × the number of logical processors."
   static let processHelp =
     "CPU execution time: 100% is one logical processor, so a process using several processors can exceed 100%."
+
+  static var logicalProcessorCount: Int { max(1, ProcessInfo.processInfo.processorCount) }
+
+  static func capacity(processors: Int = logicalProcessorCount) -> Double {
+    Double(max(1, processors)) * 100
+  }
+
+  static func executionPercent(_ normalized: Double, processors: Int = logicalProcessorCount)
+    -> Double
+  {
+    normalized * Double(max(1, processors))
+  }
+
+  static var capacityLabel: String { String(format: "of %.0f%% capacity", capacity()) }
 
   static func processPercent(current: AMProcess, previous: AMProcess?, elapsed: TimeInterval)
     -> Double

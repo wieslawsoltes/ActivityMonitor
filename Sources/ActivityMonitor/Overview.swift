@@ -46,7 +46,9 @@ struct MonitorOverview: View {
             HStack(alignment: .firstTextBaseline, spacing: 4) {
               Text(
                 metric == .cpu
-                  ? String(format: "%.1f", monitor.userCPU + monitor.systemCPU)
+                  ? String(
+                    format: "%.1f",
+                    CPUAccounting.executionPercent(monitor.userCPU + monitor.systemCPU))
                   : metric == .memory ? byteParts(used).0 : String(format: "%.1f", appCPU)
               ).font(.system(size: dense ? 26 : 34, weight: .medium)).tracking(-1.3)
                 .foregroundStyle(theme.text)
@@ -54,7 +56,7 @@ struct MonitorOverview: View {
                 .foregroundStyle(theme.secondary)
               Text(
                 metric == .cpu
-                  ? "of total capacity"
+                  ? CPUAccounting.capacityLabel
                   : metric == .memory ? "used of \(bytes(monitor.system.physical))" : "CPU workload"
               ).font(.system(size: 11)).foregroundStyle(theme.secondary).padding(.leading, 4)
             }
@@ -67,7 +69,7 @@ struct MonitorOverview: View {
           HStack(spacing: 12) {
             dot(
               metric == .cpu
-                ? "User" : metric == .energy ? "CPU workload" : metric == .disk ? "Read" : "In",
+                ? "Total" : metric == .energy ? "CPU workload" : metric == .disk ? "Read" : "In",
               theme.blue)
             if metric != .energy {
               dot(metric == .cpu ? "System" : metric == .disk ? "Write" : "Out", theme.coral)
@@ -95,10 +97,17 @@ struct MonitorOverview: View {
           (max(0, 100 - monitor.userCPU - monitor.systemCPU), theme.recessed),
         ]).padding(.top, dense ? 8 : 25)
         VStack(spacing: dense ? 6 : 12) {
-          detail("User", String(format: "%.2f%%", monitor.userCPU), theme.blue)
-          detail("System", String(format: "%.2f%%", monitor.systemCPU), theme.coral)
           detail(
-            "Idle", String(format: "%.2f%%", max(0, 100 - monitor.userCPU - monitor.systemCPU)),
+            "User", String(format: "%.2f%%", CPUAccounting.executionPercent(monitor.userCPU)),
+            theme.blue)
+          detail(
+            "System", String(format: "%.2f%%", CPUAccounting.executionPercent(monitor.systemCPU)),
+            theme.coral)
+          detail(
+            "Idle",
+            String(
+              format: "%.2f%%",
+              CPUAccounting.executionPercent(max(0, 100 - monitor.userCPU - monitor.systemCPU))),
             theme.recessed)
         }.padding(.top, dense ? 8 : 21)
       }

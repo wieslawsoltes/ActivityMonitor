@@ -66,6 +66,24 @@ final class CPUAccountingTests: XCTestCase {
     XCTAssertEqual(usage.system, 25)
     XCTAssertEqual(usage.idle, 25)
   }
+  func testHostPresentationUsesLogicalProcessorCapacityWithoutClipping() {
+    for count in [1, 4, 10, 16] {
+      let samples = TelemetryData.samples(
+        points: [Point(date: Date(), a: 60, b: 15), Point(date: Date(), a: 80, b: 20)],
+        metric: .cpu, maximumGap: 10, logicalProcessors: count)
+      XCTAssertEqual(samples.map(\.value), [75, 15, 100, 20].map { $0 * Double(count) })
+      XCTAssertEqual(
+        TelemetryData.domain(samples, metric: .cpu, logicalProcessors: count),
+        0...Double(count * 100))
+      XCTAssertEqual(CPUAccounting.executionPercent(75, processors: count), Double(75 * count))
+      XCTAssertEqual(
+        CPUAccounting.executionPercent(60 + 15 + 25, processors: count),
+        CPUAccounting.capacity(processors: count))
+    }
+    XCTAssertEqual(CPUAccounting.capacity(processors: 0), 100)
+    XCTAssertEqual(TelemetryData.domain([], metric: .gpu, logicalProcessors: 16), 0...100)
+  }
+
   func testApplicationWorkloadChartPreservesMulticoreValues() {
     let samples = TelemetryData.samples(
       points: [Point(date: Date(), a: 1000, b: 0)], metric: .energy, maximumGap: 10)
