@@ -45,3 +45,7 @@ GitHub Actions builds and runs the test suite on the latest macOS Apple silicon 
 To release, first wait for green CI on the intended commit, then push a version tag such as `v1.0.1`. The release workflow validates the tag, repeats both architecture tests, builds versioned installers, verifies their contents and signatures, and publishes a GitHub release only after all checks succeed. It attaches the DMG, ZIP containing the full app bundle, portable SHA-256 checksums and installation notes. Failed builds do not publish a release.
 
 Pull-request builds use ad-hoc signing without Apple credentials. Tagged releases can use the protected `apple-signing` environment for Developer ID signing and notarization; see [Apple signing setup](docs/APPLE_SIGNING.md). Once enabled, signing, notarization or Gatekeeper failures prevent publication. The publishing job uses only its scoped GitHub token.
+
+## Performance regression gates
+
+Run `./scripts/performance.sh` in addition to `swift test` before merging UI or telemetry changes. CI retains release-mode timing samples and physical-footprint measurements. See [performance gates](docs/performance/OPTIMIZATION.md) for budgets, headless coverage, profiling and interpretation.

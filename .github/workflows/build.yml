@@ -4,7 +4,7 @@ on:
     inputs:
       version:
         type: string
-        default: '1.4.1'
+        default: '1.5.0'
 permissions:
   contents: read
 jobs:
@@ -22,8 +22,20 @@ jobs:
         run: swift --version && xcodebuild -version
       - name: Packaging failure-gate tests
         run: python3 -m unittest discover -s Tests/Packaging -v
-      - name: Build and test
+      - name: Performance gate failure tests
+        run: python3 -m unittest discover -s Tests/Performance -v
+      - name: Build and test (includes headless UI and lifecycle gates)
         run: swift test
+      - name: Release performance and memory gates
+        run: ./scripts/performance.sh
+      - name: Retain benchmark measurements
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: performance-${{ matrix.runner }}
+          path: .build/performance/
+          retention-days: 30
+          if-no-files-found: warn
   package:
     name: Universal installable app
     needs: test

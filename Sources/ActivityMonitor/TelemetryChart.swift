@@ -6,7 +6,11 @@ struct TelemetrySample: Identifiable {
   let value: Double
   let series: Int
   let segment: Int
-  var id: String { "\(date.timeIntervalSince1970)-\(series)" }
+  struct ID: Hashable {
+    let date: Date
+    let series: Int
+  }
+  var id: ID { ID(date: date, series: series) }
   var group: String { "\(series)-\(segment)" }
 }
 enum TelemetryData {
@@ -14,6 +18,7 @@ enum TelemetryData {
     -> [TelemetrySample]
   {
     var result: [TelemetrySample] = []
+    result.reserveCapacity(points.count * 2)
     var segment = 0
     var previous: Date?
     for point in points {
@@ -70,10 +75,26 @@ struct TelemetryChart: View {
   let theme: MonitorTheme
   @State private var selectedDate: Date?
   private var start: Date { end.addingTimeInterval(Double(-range * 60)) }
-  private var visible: [TelemetrySample] { samples.filter { $0.date >= start } }
-  private var domain: ClosedRange<Double> { TelemetryData.domain(visible, metric: metric) }
+  private let traces: [TelemetryTrace]
+  private let visible: [TelemetrySample]
+  private let domain: ClosedRange<Double>
+  init(samples: [TelemetrySample], metric: Metric, range: Int, end: Date, theme: MonitorTheme) {
+    self.samples = samples
+    self.metric = metric
+    self.range = range
+    self.end = end
+    self.theme = theme
+    let start = end.addingTimeInterval(Double(-range * 60))
+    let visible = samples.filter { $0.date >= start && $0.date <= end }
+    self.visible = visible
+    self.traces = TelemetryTrace.make(visible)
+    self.domain = TelemetryData.domain(visible, metric: metric)
+  }
   private var nearest: Date? { selectedDate.flatMap { TelemetryData.nearest($0, in: visible) } }
-  private var selection: [TelemetrySample] { visible.filter { $0.date == nearest } }
+  private var selection: [TelemetrySample] {
+    guard let date = nearest else { return [] }
+    return visible.filter { $0.date == date }
+  }
   private func color(_ sample: TelemetrySample) -> Color {
     metric == .memory
       ? ((visible.last?.value ?? 1) >= 3
@@ -99,20 +120,12 @@ struct TelemetryChart: View {
   }
   var body: some View {
     Chart {
-      ForEach(visible) { point in
-        AreaMark(
-          x: .value("Time", point.date), yStart: .value("Baseline", 0),
-          yEnd: .value("Value", point.value), series: .value("Segment", point.group)
-        )
-        .foregroundStyle(color(point).opacity(0.13))
-        .interpolationMethod(metric == .memory ? .stepEnd : .linear)
-        LineMark(
-          x: .value("Time", point.date), y: .value("Value", point.value),
-          series: .value("Segment", point.group)
-        )
-        .foregroundStyle(color(point)).lineStyle(StrokeStyle(lineWidth: 1.5))
-        .interpolationMethod(metric == .memory ? .stepEnd : .linear)
-      }
+      // Keep native axes, inspection and keyboard interaction. The exact series
+      // paths are drawn in a single Canvas instead of thousands of mark views.
+      PointMark(x: .value("Time", start), y: .value("Value", domain.lowerBound))
+        .opacity(0).accessibilityHidden(true)
+      PointMark(x: .value("Time", end), y: .value("Value", domain.upperBound))
+        .opacity(0).accessibilityHidden(true)
       if let nearest {
         RuleMark(x: .value("Selected time", nearest))
           .foregroundStyle(theme.tertiary).lineStyle(StrokeStyle(lineWidth: 1, dash: [3, 3]))
@@ -122,7 +135,8 @@ struct TelemetryChart: View {
         }
       }
     }
-    .chartXScale(domain: start...end).chartYScale(domain: domain)
+    .chartXScale(domain: start...end, range: .plotDimension(startPadding: 0, endPadding: 0))
+    .chartYScale(domain: domain, range: .plotDimension(startPadding: 0, endPadding: 0))
     .chartLegend(.hidden)
     .chartXAxis {
       AxisMarks(values: [start, start.addingTimeInterval(Double(range * 30)), end]) { axis in
@@ -150,7 +164,32 @@ struct TelemetryChart: View {
       }
     }
     .chartXSelection(value: $selectedDate)
-    .chartPlotStyle { plot in plot.clipped() }
+    .chartPlotStyle { plot in
+      plot.background {
+        Canvas { context, size in
+          let baseline = domain.upperBound / (domain.upperBound - domain.lowerBound) * size.height
+          for trace in traces {
+            let points = trace.coordinates(
+              size: size, start: start, end: end, domain: domain, stepped: metric == .memory)
+            guard let first = points.first, let last = points.last, let sample = trace.samples.first
+            else { continue }
+            var line = Path()
+            line.addLines(points)
+            var area = line
+            area.addLine(to: CGPoint(x: last.x, y: baseline))
+            area.addLine(to: CGPoint(x: first.x, y: baseline))
+            area.closeSubpath()
+            context.fill(area, with: .color(color(sample).opacity(0.13)))
+            context.stroke(line, with: .color(color(sample)), lineWidth: 1.5)
+          }
+        }.accessibilityHidden(true).allowsHitTesting(false)
+      }.clipped()
+    }
+    .accessibilityChartDescriptor(
+      TelemetryAccessibility(
+        traces: traces, title: metric.rawValue,
+        start: start, end: end, domain: domain, label: label, value: value)
+    )
     .overlay(alignment: .topLeading) {
       if let nearest, !selection.isEmpty {
         VStack(alignment: .leading, spacing: 2) {

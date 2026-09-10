@@ -27,25 +27,49 @@ struct ProcessQuery: Equatable {
     default: return true
     }
   }
-  func apply(_ rows: [ProcessRow]) -> [ProcessRow] {
-    rows.filter { p in
-      (query.isEmpty || p.name.localizedCaseInsensitiveContains(query)
-        || (p.executableName?.localizedCaseInsensitiveContains(query) ?? false)
-        || p.user.localizedCaseInsensitiveContains(query) || String(p.id).contains(query))
-        && matchesFilter(p)
-    }.sorted { a, b in
-      guard a.id != b.id else { return false }
-      let av = ProcessValues.value(a, key: sort, metric: metric)
-      let bv = ProcessValues.value(b, key: sort, metric: metric)
-      switch (av, bv) {
+  func apply(_ rows: [ProcessRow], limit: Int? = nil) -> [ProcessRow] {
+    struct Candidate {
+      let index: Int
+      let pid: Int32
+      let value: ProcessSortValue?
+    }
+    func before(_ a: Candidate, _ b: Candidate) -> Bool {
+      guard a.pid != b.pid else { return false }
+      switch (a.value, b.value) {
       case (let av?, let bv?):
         let comparison = av.compare(bv)
-        if comparison == .orderedSame { return a.id < b.id }
+        if comparison == .orderedSame { return a.pid < b.pid }
         return descending ? comparison == .orderedDescending : comparison == .orderedAscending
       case (_?, nil): return true
       case (nil, _?): return false
-      case (nil, nil): return a.id < b.id
+      case (nil, nil): return a.pid < b.pid
       }
     }
+    let key = ProcessColumns.canonical(sort, metric: metric)
+    var candidates: [Candidate] = []
+    candidates.reserveCapacity(limit.map { min(rows.count, max(0, $0)) } ?? rows.count)
+    for (index, p) in rows.enumerated() {
+      guard matchesFilter(p),
+        query.isEmpty || p.name.localizedCaseInsensitiveContains(query)
+          || (p.executableName?.localizedCaseInsensitiveContains(query) ?? false)
+          || p.user.localizedCaseInsensitiveContains(query) || String(p.id).contains(query)
+      else { continue }
+      let candidate = Candidate(
+        index: index, pid: p.id,
+        value: ProcessValues.value(p, key: key, metric: metric))
+      if let limit {
+        guard limit > 0 else { return [] }
+        if candidates.count == limit, let last = candidates.last, !before(candidate, last) {
+          continue
+        }
+        let insertion = candidates.firstIndex { before(candidate, $0) } ?? candidates.count
+        candidates.insert(candidate, at: insertion)
+        if candidates.count > limit { candidates.removeLast() }
+      } else {
+        candidates.append(candidate)
+      }
+    }
+    if limit == nil { candidates.sort(by: before) }
+    return candidates.map { rows[$0.index] }
   }
 }

@@ -10,6 +10,10 @@ struct MonitorDestination {
   @Published var request: MonitorDestination?
 }
 
+@MainActor final class MenuBarPresentation: ObservableObject {
+  @Published var metric: Metric = .cpu
+  @Published var range = 1
+}
 struct MenuBarMonitor: View {
   @EnvironmentObject var monitor: Monitor
   @EnvironmentObject var navigation: MonitorNavigation
@@ -17,8 +21,9 @@ struct MenuBarMonitor: View {
   var closePopover: () -> Void
   @Environment(\.colorScheme) private var colorScheme
   @AppStorage("appearance") private var appearance = "System"
-  @State private var metric: Metric = .cpu
-  @State private var range = 1
+  @ObservedObject var presentation: MenuBarPresentation
+  private var metric: Metric { presentation.metric }
+  private var range: Int { presentation.range }
   @State private var top: [ProcessRow] = []
   private var theme: MonitorTheme {
     MonitorTheme(dark: appearance == "Dark" || appearance == "System" && colorScheme == .dark)
@@ -56,7 +61,8 @@ struct MenuBarMonitor: View {
         }
         .menuStyle(.borderlessButton).menuIndicator(.hidden).fixedSize().help("Monitor settings")
       }.padding(16)
-      MetricSwitcher(metric: $metric, theme: theme, compact: true).padding(.horizontal, 14)
+      MetricSwitcher(metric: $presentation.metric, theme: theme, compact: true).padding(
+        .horizontal, 14)
       ScrollView {
         VStack(spacing: 10) {
           HStack {
@@ -67,7 +73,7 @@ struct MenuBarMonitor: View {
                 .system(size: 12, weight: .semibold))
             }
             Spacer(minLength: 4)
-            HistoryRangePicker(range: $range, theme: theme)
+            HistoryRangePicker(range: $presentation.range, theme: theme)
           }
           MonitorOverview(metric: metric, range: range, theme: theme, width: 392)
           VStack(spacing: 0) {
@@ -141,7 +147,7 @@ struct MenuBarMonitor: View {
       ProcessQuery(
         metric: metric, query: "", filter: metric == .energy ? "Applications" : "All processes",
         sort: metric == .network ? "received" : "primary", descending: true
-      ).apply(rows).prefix(5))
+      ).apply(rows, limit: 5))
   }
   private func show(_ pid: Int32?) {
     navigation.request = MonitorDestination(metric: metric, range: range, pid: pid)

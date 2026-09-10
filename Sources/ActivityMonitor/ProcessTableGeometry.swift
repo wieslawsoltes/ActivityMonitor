@@ -49,3 +49,59 @@ struct ProcessTableSelectionScroll: NSViewRepresentable {
     }
   }
 }
+
+/// Bound SwiftUI row construction even when a two-axis scroll view proposes an
+/// unbounded height. Absolute row indices preserve striping, selection and reveal.
+enum ProcessVisibleRows {
+  static func range(count: Int, viewport: CGRect, overscan: Int = 2) -> Range<Int> {
+    guard count > 0 else { return 0..<0 }
+    let first = max(0, Int(floor(max(0, viewport.minY - 37) / 41)) - overscan)
+    let last = Int(ceil(max(0, viewport.maxY - 37) / 41)) + overscan
+    let lower = min(count, first)
+    return lower..<min(count, max(lower, last))
+  }
+}
+
+/// Keep scroll-position invalidation inside the row viewport. Scrolling must not
+/// rebuild the process toolbar, menus, column preferences or dashboard shell.
+struct ProcessViewportRows<RowContent: View>: View {
+  let entries: [ProcessTreeEntry]
+  let widthChanged: (CGFloat) -> Void
+  let horizontalChanged: (CGFloat) -> Void
+  let rowContent: (Int, ProcessTreeEntry) -> RowContent
+  @State private var viewport: CGRect
+  init(
+    entries: [ProcessTreeEntry], height: CGFloat,
+    widthChanged: @escaping (CGFloat) -> Void,
+    horizontalChanged: @escaping (CGFloat) -> Void,
+    @ViewBuilder rowContent: @escaping (Int, ProcessTreeEntry) -> RowContent
+  ) {
+    self.entries = entries
+    self.widthChanged = widthChanged
+    self.horizontalChanged = horizontalChanged
+    self.rowContent = rowContent
+    _viewport = State(initialValue: CGRect(x: 0, y: 0, width: 1200, height: height))
+  }
+  var body: some View {
+    let range = ProcessVisibleRows.range(count: entries.count, viewport: viewport)
+    VStack(spacing: 0) {
+      Color.clear.frame(height: 37 + CGFloat(range.lowerBound) * 41)
+      ForEach(Array(entries[range].enumerated()), id: \.element.id) { offset, entry in
+        rowContent(range.lowerBound + offset, entry)
+      }
+      Color.clear.frame(height: CGFloat(entries.count - range.upperBound) * 41)
+    }.background(
+      ProcessTableViewport(
+        changed: widthChanged,
+        visibleChanged: { rect in
+          if abs(viewport.minX - rect.minX) > 0.1 { horizontalChanged(rect.minX) }
+          if ProcessVisibleRows.range(count: entries.count, viewport: rect) != range
+            || abs(viewport.minX - rect.minX) > 0.1
+            // Remember the reset origin even when both visible ranges are empty.
+            || (entries.isEmpty && viewport != rect)
+          {
+            viewport = rect
+          }
+        }))
+  }
+}

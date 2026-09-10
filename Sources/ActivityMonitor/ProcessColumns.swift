@@ -121,10 +121,12 @@ enum ProcessColumns {
 
 /// Overrides are isolated by perspective. Missing keys retain the previous defaults.
 struct ProcessColumnPreferences {
+  private static let decoded = BoundedCache<String, [String: [String: Bool]]>(capacity: 16)
   var overrides: [String: [String: Bool]]
   init(_ json: String = "{}") {
-    overrides =
+    overrides = Self.decoded.value(for: json) {
       (try? JSONDecoder().decode([String: [String: Bool]].self, from: Data(json.utf8))) ?? [:]
+    }
   }
   var json: String { (try? String(data: JSONEncoder().encode(overrides), encoding: .utf8)) ?? "{}" }
   func isVisible(

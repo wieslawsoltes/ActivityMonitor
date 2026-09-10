@@ -148,7 +148,15 @@ struct ProcessIcon: View {
 }
 
 @MainActor enum ProcessIconCache {
-  static let images = NSCache<NSString, NSImage>()
+  static let images: NSCache<NSString, NSImage> = {
+    let cache = NSCache<NSString, NSImage>()
+    cache.countLimit = 256
+    return cache
+  }()
+  static func retain(identities: [Int32: UInt64]) {
+    processes = processes.filter { identities[$0.key] == $0.value.start }
+  }
+  static var retainedProcessCount: Int { processes.count }
   private struct Entry {
     let start: UInt64
     let image: NSImage?
@@ -161,6 +169,27 @@ struct ProcessIcon: View {
     processes[pid] = Entry(start: start, image: image)
     return image
   }
+  /// Keep one small Retina representation, sufficient for the largest 48-point inspector icon.
+  static func thumbnail(_ original: NSImage) -> NSImage {
+    guard
+      let bitmap = NSBitmapImageRep(
+        bitmapDataPlanes: nil, pixelsWide: 128, pixelsHigh: 128,
+        bitsPerSample: 8, samplesPerPixel: 4, hasAlpha: true, isPlanar: false,
+        colorSpaceName: .deviceRGB, bytesPerRow: 0, bitsPerPixel: 0),
+      let context = NSGraphicsContext(bitmapImageRep: bitmap)
+    else { return original }
+    NSGraphicsContext.saveGraphicsState()
+    NSGraphicsContext.current = context
+    context.imageInterpolation = .high
+    original.draw(
+      in: CGRect(x: 0, y: 0, width: 128, height: 128), from: .zero,
+      operation: .copy, fraction: 1)
+    NSGraphicsContext.restoreGraphicsState()
+    bitmap.size = NSSize(width: 64, height: 64)
+    let result = NSImage(size: bitmap.size)
+    result.addRepresentation(bitmap)
+    return result
+  }
   private static func resolve(pid: Int32, isApp: Bool) -> NSImage? {
     var buffer = [CChar](repeating: 0, count: 4096)
     if proc_pidpath(pid, &buffer, UInt32(buffer.count)) > 0 {
@@ -168,11 +197,11 @@ struct ProcessIcon: View {
       if let range = path.range(of: ".app/") {
         let bundle = String(path[..<range.lowerBound]) + ".app"
         if let cached = images.object(forKey: bundle as NSString) { return cached }
-        let image = NSWorkspace.shared.icon(forFile: bundle)
+        let image = thumbnail(NSWorkspace.shared.icon(forFile: bundle))
         images.setObject(image, forKey: bundle as NSString)
         return image
       }
     }
-    return isApp ? NSRunningApplication(processIdentifier: pid)?.icon : nil
+    return isApp ? NSRunningApplication(processIdentifier: pid)?.icon.map(thumbnail) : nil
   }
 }

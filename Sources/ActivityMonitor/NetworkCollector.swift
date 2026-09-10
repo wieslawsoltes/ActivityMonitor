@@ -1,3 +1,4 @@
+import Darwin
 import Foundation
 
 struct ProcessNetworkCounters {
@@ -57,4 +58,61 @@ func parseProcessNetwork(_ text: String) -> [Int32: ProcessNetworkCounters] {
       packetsOut: counters["packets_out"].flatMap(UInt64.init))
   }
   return result
+}
+
+/// Slow nettop work never delays the first process/system snapshot or the one-second sampler.
+/// Only one request may run at a time; identity checks keep cached counters safe across PID reuse.
+final class ProcessNetworkSampler: @unchecked Sendable {
+  private let lock = NSLock()
+  private let queue = DispatchQueue(label: "ActivityMonitor.network", qos: .utility)
+  private var cache: [Int32: (UInt64, ProcessNetworkCounters)] = [:]
+  private var completed = Date.distantPast
+  private var inFlight = false
+  private let read: () -> [Int32: ProcessNetworkCounters]
+  private let identity: (Int32) -> UInt64?
+
+  init(
+    read: @escaping () -> [Int32: ProcessNetworkCounters] = readProcessNetwork,
+    identity: @escaping (Int32) -> UInt64? = processStartTime
+  ) {
+    self.read = read
+    self.identity = identity
+  }
+
+  func collect(identities: [Int32: UInt64], now: Date) -> [Int32: ProcessNetworkCounters] {
+    let shouldStart = lock.withLock {
+      guard !inFlight, now.timeIntervalSince(completed) >= 5 else { return false }
+      inFlight = true
+      return true
+    }
+    if shouldStart {
+      queue.async { [self] in
+        let counters = read()
+        let next = Dictionary(
+          uniqueKeysWithValues: counters.compactMap {
+            pid, value -> (Int32, (UInt64, ProcessNetworkCounters))? in
+            guard let start = identities[pid], identity(pid) == start else { return nil }
+            return (pid, (start, value))
+          })
+        lock.withLock {
+          cache = next
+          completed = Date()
+          inFlight = false
+        }
+      }
+    }
+    return lock.withLock {
+      Dictionary(
+        uniqueKeysWithValues: cache.compactMap { pid, value in
+          identities[pid] == value.0 ? (pid, value.1) : nil
+        })
+    }
+  }
+}
+
+func processStartTime(_ pid: Int32) -> UInt64? {
+  var value = proc_bsdinfo()
+  let size = Int32(MemoryLayout<proc_bsdinfo>.size)
+  guard proc_pidinfo(pid, PROC_PIDTBSDINFO, 0, &value, size) == size else { return nil }
+  return value.pbi_start_tvsec * 1_000_000 + value.pbi_start_tvusec
 }

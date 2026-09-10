@@ -3,10 +3,12 @@ import SwiftUI
 
 /// Point widths are independent of window size and isolated by perspective.
 struct ProcessColumnWidths {
+  private static let decoded = BoundedCache<String, [String: [String: Double]]>(capacity: 16)
   var values: [String: [String: Double]]
   init(_ json: String = "{}") {
-    values =
+    values = Self.decoded.value(for: json) {
       (try? JSONDecoder().decode([String: [String: Double]].self, from: Data(json.utf8))) ?? [:]
+    }
   }
   var json: String { (try? String(data: JSONEncoder().encode(values), encoding: .utf8)) ?? "{}" }
   func width(_ key: String, metric: Metric) -> CGFloat? {
@@ -186,8 +188,12 @@ struct ProcessColumnResizeHandle: View {
 /// Read the usable clip width, including the space reserved by legacy scrollbars.
 struct ProcessTableViewport: NSViewRepresentable {
   var changed: (CGFloat) -> Void
+  var visibleChanged: (CGRect) -> Void = { _ in }
   final class Anchor: NSView {
+    override var isFlipped: Bool { true }
     var changed: ((CGFloat) -> Void)?
+    var visibleChanged: ((CGRect) -> Void)?
+    private var lastVisible: CGRect = .zero
     var observer: NSObjectProtocol?
     weak var clip: NSClipView?
     var lastWidth: CGFloat = 0
@@ -209,21 +215,42 @@ struct ProcessTableViewport: NSViewRepresentable {
       report()
     }
     func report() {
-      guard let width = clip?.bounds.width, width > 0, abs(width - lastWidth) > 0.5 else { return }
-      lastWidth = width
-      DispatchQueue.main.async { [weak self] in self?.changed?(width) }
+      guard let clip, let scroll = clip.enclosingScrollView, let document = scroll.documentView
+      else { return }
+      let width = clip.bounds.width
+      if width > 0, abs(width - lastWidth) > 0.5 {
+        lastWidth = width
+        DispatchQueue.main.async { [weak self] in self?.changed?(width) }
+      }
+      let visible = convert(scroll.documentVisibleRect, from: document)
+      if visible != lastVisible {
+        lastVisible = visible
+        DispatchQueue.main.async { [weak self] in self?.visibleChanged?(visible) }
+      }
     }
   }
   func makeNSView(context: Context) -> Anchor { Anchor() }
   func updateNSView(_ view: Anchor, context: Context) {
     view.changed = changed
+    view.visibleChanged = visibleChanged
     DispatchQueue.main.async { [weak view] in view?.connect() }
   }
 }
 
 /// Never silently clip leading digits when the user makes a numeric column narrow.
 enum ProcessCellText {
+  private struct Key: Hashable {
+    let text: String
+    let width: CGFloat
+    let font: NSFont
+  }
+  private static let cache = BoundedCache<Key, String>(capacity: 4096)
   static func truncate(_ text: String, width: CGFloat, font: NSFont) -> String {
+    cache.value(for: Key(text: text, width: width, font: font)) {
+      measureAndTruncate(text, width: width, font: font)
+    }
+  }
+  private static func measureAndTruncate(_ text: String, width: CGFloat, font: NSFont) -> String {
     func measured(_ value: String) -> CGFloat {
       (value as NSString).size(withAttributes: [.font: font]).width
     }

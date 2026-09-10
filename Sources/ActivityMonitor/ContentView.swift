@@ -8,6 +8,7 @@ struct ContentView: View {
   @Environment(\.accessibilityReduceMotion) private var reduceMotion
   @AppStorage("showMenuBar") var showMenuBar = false
   @AppStorage("appearance") var appearance = "System"
+  private static let machineName = Host.current().localizedName ?? "Mac"
   @State var metric: Metric = .cpu
   @State var range = 1
   @State var query = ""
@@ -105,7 +106,10 @@ struct ContentView: View {
           ZStack(alignment: .trailing) {
             Color.black.opacity(0.18).onTapGesture { inspector = false }
             inspectorPanel.frame(width: min(layout.width - 28, 360))
-              .padding(14).shadow(color: .black.opacity(0.18), radius: 18)
+              .background {
+                UnevenRoundedRectangle(topLeadingRadius: 14, topTrailingRadius: 14)
+                  .fill(theme.card).shadow(color: .black.opacity(0.18), radius: 18)
+              }.padding(14)
               .transition(.move(edge: .trailing).combined(with: .opacity))
           }
         }
@@ -318,7 +322,7 @@ struct ContentView: View {
             BrandMark()
             VStack(alignment: .leading, spacing: 2) {
               Text("Activity Monitor").font(.system(size: 13, weight: .semibold))
-              Text("\(Host.current().localizedName ?? "Mac") · \(architectureLabel)").font(
+              Text("\(Self.machineName) · \(architectureLabel)").font(
                 .system(size: 10)
               ).foregroundStyle(theme.secondary)
             }
