@@ -31,10 +31,10 @@ final class ProcessListInteractionsTests: XCTestCase {
     let columns = ProcessColumns.defaults(.cpu)
     let layout = ProcessColumnLayout(viewport: 1377, metric: .cpu, columns: columns, saved: .init())
     XCTAssertEqual(layout.total, 1377)
-    XCTAssertEqual(layout.width("pid"), 76)
+    XCTAssertEqual(layout.width("pid"), 64)
     XCTAssertEqual(layout.name + layout.widths.values.reduce(0, +), layout.total)
     let small = ProcessColumnLayout(viewport: 360, metric: .cpu, columns: columns, saved: .init())
-    XCTAssertEqual(small.name, 140)
+    XCTAssertEqual(small.name, 180)
     XCTAssertGreaterThan(small.total, 360)
     var saved = ProcessColumnWidths()
     saved.set("primary", metric: .cpu, width: 180)
@@ -55,7 +55,7 @@ final class ProcessListInteractionsTests: XCTestCase {
     XCTAssertEqual(after.total, before.total + 70)
     let all = ProcessColumnLayout(
       viewport: 1377, metric: .cpu, columns: ProcessColumns.available(.cpu), saved: .init())
-    XCTAssertEqual(all.name, 300)
+    XCTAssertEqual(all.name, 240)
   }
   func testReorderingIncludesNameAndSurvivesHiddenColumnsAndRelaunch() {
     var order = ProcessColumnOrder()
