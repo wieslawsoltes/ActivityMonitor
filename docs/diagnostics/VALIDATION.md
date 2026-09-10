@@ -4,8 +4,8 @@ Validated on 10 September 2026, on an Apple silicon Mac with 11 logical processo
 
 ## Automated checks
 
-- `swift test`: 111 tests, zero failures; six opt-in performance tests skipped in the normal run.
-- Release performance run: all 20 measurement budgets and memory gates passed. The 15-minute diagnostic workspace measured 72.09 ms median / 76.00 ms p95; the 2,500-row diagnostic table measured 35.40 ms median / 37.37 ms p95.
+- `swift test`: 117 tests, zero failures; seven opt-in performance tests skipped in the normal run.
+- Release performance run: all 22 measurement budgets and memory gates passed. The 15-minute diagnostic workspace measured 81.82 ms median / 87.77 ms p95; the 2,500-row diagnostic table measured 38.92 ms median / 38.93 ms p95.
 - Performance gate tests: six passed. Packaging/notarization failure-path tests: six passed.
 - Universal release build: arm64 and x86_64 compiled successfully.
 - App signature, DMG integrity, ZIP contents, version, Applications link and SHA-256 checksums verified for the local 1.6.0 candidate. It is ad-hoc signed, not notarized or published.
@@ -37,8 +37,17 @@ The universal 1.6.0 local candidate was rebuilt and its DMG/ZIP contents verifie
 - Adaptive layout fixtures fit 1, 11, 16, 64, 67 and 128 charts into representative viewport sizes, enlarge filtered results, and retain a legible scrolling fallback for 4,096 threads. Native validation showed every live VM thread together and all eleven host processors inside the compact system popover. Optional Paged charts retained twelve tiles and working next/previous navigation.
 - The full suite passed, followed by the focused CPU-detail suite and all release performance gates after the final grid layout refinement. The universal 1.6.0 candidate and DMG/ZIP were rebuilt and verified again.
 
+## Mapping visualizations
+
+- Five mapping tests cover independent resident/virtual totals, invalid and measured-zero values, repeated executable mappings, full-path grouping and Other totals, exact high-address offsets, overflow rejection, partial status, and rendering all three chart types in both appearances.
+- The focused mapping and diagnostics UI suite passed eight tests after the final layout refinements. All fifteen diagnostic pages retain their tables at both tested window sizes.
+- Native checks on a running VM exercised protection bars, virtual address intervals, Resident/Virtual size selection, path filtering, bar inspection and show/hide behavior. A compact 800 × 524 window opened the chart popover; arrow-key inspection selected the first image, and enlarging the window restored the inline chart. Two executable mappings of one library (48 KB each) correctly contributed 96 KB to its filtered virtual-size bar. Screenshots cover both appearances.
+- Release performance with 16,384 mapping records measured 3.11 ms median / 4.18 ms p95 for aggregation and 30.35 ms median / 38.22 ms p95 for chart rendering. All 22 measurement gates passed.
+
 ## Limits
 
 Physical runtime validation was on Apple silicon. Intel was cross-compiled; it was not tested on physical Intel hardware. Access to another process’s Mach port names and some memory/GPU details remains subject to macOS permissions. Reports label collection failures and do not invent unavailable values. The optional unique-thread-ID kernel flavor has an explicit fallback to thread handles.
+
+GitHub run `34484966162` on the preceding `09eb9eb` revision passed functional tests on Apple silicon but failed the existing table-refresh p95 budget (98.55 ms against 50 ms); the latest local run measured 17.44 ms. The updated revision requires a fresh CI result.
 
 The candidate is intended for user validation before merge. No release tag or public release was created.

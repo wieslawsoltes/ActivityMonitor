@@ -19,6 +19,23 @@ The workspace provides:
 
 Tables support column resizing, double-click fitting, drag reordering, sorting, header-menu visibility, multiple selection, keyboard navigation, ⌘C, and Finder reveal for file paths. Column layouts are remembered separately per diagnostic table. Filter and export tables as CSV, save reports as text, or export the collected process snapshot, history and reports as JSON.
 
+## Memory visualizations
+
+**Memory map** offers two views: horizontal bars compare memory grouped by protection; **Address ranges** places the eight largest virtual mappings on a linear address axis. Each interval retains its true start, length and the gaps between mappings. Axis labels are offsets from the displayed base address. Small ranges may appear very thin beside large reservations; filter the table to inspect a smaller part of the address space.
+
+**Mapped images** ranks the eight largest images with an **Other** bar accounting for the remaining images. Multiple executable mappings of the same full path contribute to one bar, while the table retains each address separately. Hover or select a bar to see its full path and size. A focused chart supports Up/Down inspection and exposes values to accessibility tools.
+
+Choose **Resident** or **Virtual size** independently: resident pages are part of a virtual mapping, so these measurements are not stacked together. Both charts follow the table filter and its timestamped snapshot. Totals cover readable mappings, can include shared pages, and are not process footprint or on-disk file size. Unavailable sizes and partial collections are labelled. Shared-cache libraries may not appear individually.
+
+The chart button hides or shows the visualization above the table. In compact windows it opens the chart in a popover, leaving space for the list.
+
+| View | Light | Dark |
+| :--- | :---: | :---: |
+| Memory by protection | ![Memory protection chart light](../screenshots/mapping-charts/memory-light.jpg) | ![Memory protection chart dark](../screenshots/mapping-charts/memory-dark.jpg) |
+| Mapped image sizes | ![Mapped images chart light](../screenshots/mapping-charts/images-light.jpg) | ![Mapped images chart dark](../screenshots/mapping-charts/images-dark.jpg) |
+
+![Virtual address ranges with gaps preserved](../screenshots/mapping-charts/ranges-dark.jpg)
+
 ## Individual thread charts
 
 CPU and Energy pages offer **One chart → Individual threads**, including in tool windows and process menu-bar pins. One chart remains the default. The thread grid shows each thread’s name or unique ID, its current CPU usage and history. The grid fits all threads into the available viewport where legible, resizing as the count or window changes. Dense grids simplify labels; hover or select a tile for full identity, usage and an interactive chart. Filter to enlarge a subset. Very large collections scroll vertically once charts reach a usable minimum size, with **Paged charts** available as an alternative. Blue shows total CPU and pink shows system CPU. Threads can move between processors; these charts do not claim core affinity.

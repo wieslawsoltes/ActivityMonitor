@@ -45,3 +45,11 @@ See [GPU validation](GPU_VALIDATION.md) for hardware evidence, reproduction and 
 ## Refresh interval
 
 Monitoring defaults to one-second updates. Two- and five-second options remain available in the main window and menu-bar settings. Collection runs sequentially in the background; actual sample spacing includes collection time. Rates use measured elapsed time. Per-process network accounting retains its separate five-second refresh.
+
+## Memory map and mapped-image charts
+
+These are snapshot distributions, not time histories. Protection bars sum the selected Resident or Size counter across the filtered region records. Missing, negative and non-finite values are omitted and counted as unavailable; measured zero remains valid. Resident and virtual bytes are separate selectable measures, never stacked. Resident mappings can include shared pages and do not equal the process physical footprint.
+
+The address interval plot selects the eight largest valid virtual regions, then orders them by address. It uses a linear axis with gaps intact; the origin is the first displayed start address. Hexadecimal addresses are parsed as UInt64, range-end overflow is rejected, and the base is subtracted before conversion to chart coordinates to preserve nearby large-address precision. The summary total includes all valid filtered ranges, not only the eight displayed.
+
+Mapped images retain every readable executable file mapping. Chart bars aggregate by full path, including repeated mappings; identical basenames in different directories remain separate. The eight largest images plus Other account for the entire readable filtered total. These are observed executable mapping bytes, not a complete loaded-image footprint or file size. Shared-cache libraries may be represented by their containing mapping. Existing region limits, partial-read status and snapshot timestamps apply to the charts as well as the tables.
