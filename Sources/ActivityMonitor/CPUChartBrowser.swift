@@ -1,5 +1,14 @@
 import SwiftUI
 
+/// Owned by the window or process session, outside adaptive view branches.
+final class CPUChartPresentation: ObservableObject {
+  @Published var individual = false
+  @Published var details = false
+  @Published var query = "" { didSet { if query != oldValue { page = 0 } } }
+  @Published var paginated = false { didSet { if paginated != oldValue { page = 0 } } }
+  @Published var page = 0
+}
+
 struct CPUChartModePicker: View {
   @Binding var individual: Bool
   var threads = false
@@ -41,7 +50,7 @@ struct CPUGridLayout {
       let h = (height - CGFloat(rows - 1) * gap) / CGFloat(rows)
       guard h >= 38 else { continue }
       let score =
-        abs(log(Double(w / h) / 1.85)) + Double(columns * rows - count) / Double(count) * 0.2
+        abs(log(Double(w / h) / 1.85)) + Double(columns * rows - count) / Double(count) * 1.5
       if best == nil || score < best!.score { best = (columns, rows, w, h, score) }
     }
     columns = best?.columns ?? maximumColumns
@@ -59,51 +68,66 @@ struct CPUChartBrowser: View {
   let theme: MonitorTheme
   var threads = false
   var status: String? = nil
-  @State private var query = ""
-  @State private var paginated = false
-  @State private var page = 0
-  private let pageSize = 12
+  var presentation: CPUChartPresentation? = nil
+  @StateObject private var localPresentation = CPUChartPresentation()
+  var body: some View {
+    CPUChartBrowserContent(
+      series: series, range: range, end: end, theme: theme, threads: threads,
+      status: status, presentation: presentation ?? localPresentation)
+  }
+}
+private struct CPUChartBrowserContent: View {
+  let series: [CPUUsageSeries]
+  let range: Int
+  let end: Date
+  let theme: MonitorTheme
+  let threads: Bool
+  let status: String?
+  @ObservedObject var presentation: CPUChartPresentation
   @State private var inspected: String?
+  private let pageSize = 12
   private var filtered: [CPUUsageSeries] {
     series.filter {
-      query.isEmpty || ($0.title + " " + $0.detail).localizedCaseInsensitiveContains(query)
+      presentation.query.isEmpty
+        || ($0.title + " " + $0.detail).localizedCaseInsensitiveContains(presentation.query)
     }
   }
-  private var currentPage: Int { min(page, max(0, (filtered.count - 1) / pageSize)) }
+  private var currentPage: Int { min(presentation.page, max(0, (filtered.count - 1) / pageSize)) }
   private var visible: [CPUUsageSeries] {
-    paginated ? Array(filtered.dropFirst(currentPage * pageSize).prefix(pageSize)) : filtered
+    presentation.paginated
+      ? Array(filtered.dropFirst(currentPage * pageSize).prefix(pageSize)) : filtered
   }
   var body: some View {
     VStack(alignment: .leading, spacing: 10) {
       HStack(spacing: 8) {
         Text(
-          paginated && !filtered.isEmpty
+          presentation.paginated && !filtered.isEmpty
             ? "\(currentPage * pageSize + 1)–\(min((currentPage + 1) * pageSize, filtered.count)) of \(filtered.count)"
             : "\(filtered.count) \(threads ? "threads" : "processors")"
         )
         .font(.system(size: 10)).foregroundStyle(theme.secondary).monospacedDigit()
         Spacer(minLength: 0)
         Menu {
-          Picker("Chart layout", selection: $paginated) {
+          Picker("Chart layout", selection: $presentation.paginated) {
             Text("Fit all charts").tag(false)
             Text("Paged charts").tag(true)
           }
         } label: {
-          Text(paginated ? "Paged" : "Fit all").font(.system(size: 10))
+          Text(presentation.paginated ? "Paged" : "Fit all").font(.system(size: 10))
         }.menuStyle(.borderlessButton).fixedSize().help("Chart layout")
-        TextField(threads ? "Find thread" : "Find processor", text: $query)
+        TextField(threads ? "Find thread" : "Find processor", text: $presentation.query)
           .textFieldStyle(.plain).font(.system(size: 10)).padding(6).frame(width: 110)
           .background(theme.subtle, in: RoundedRectangle(cornerRadius: 5))
           .accessibilityLabel(threads ? "Find thread" : "Find processor")
-        if paginated {
+        if presentation.paginated {
           Button {
-            page = max(0, currentPage - 1)
+            presentation.page = max(0, currentPage - 1)
           } label: {
             Image(systemName: "chevron.left")
           }
           .disabled(currentPage == 0).help("Previous charts")
           Button {
-            page = currentPage + 1
+            presentation.page = currentPage + 1
           } label: {
             Image(systemName: "chevron.right")
           }
@@ -113,8 +137,11 @@ struct CPUChartBrowser: View {
       if filtered.isEmpty {
         VStack(spacing: 8) {
           Image(systemName: "cpu").font(.system(size: 24, weight: .light))
-          Text(query.isEmpty ? status ?? "Waiting for processor samples" : "No matching charts")
-            .font(.system(size: 11)).multilineTextAlignment(.center)
+          Text(
+            presentation.query.isEmpty
+              ? status ?? "Waiting for processor samples" : "No matching charts"
+          )
+          .font(.system(size: 11)).multilineTextAlignment(.center)
         }.foregroundStyle(theme.secondary).frame(maxWidth: .infinity, maxHeight: .infinity)
       } else {
         GeometryReader { geometry in
@@ -138,7 +165,8 @@ struct CPUChartBrowser: View {
                   )
                   .popover(
                     isPresented: Binding(
-                      get: { inspected == item.id }, set: { if !$0 { inspected = nil } })
+                      get: { inspected == item.id },
+                      set: { if !$0 { inspected = nil } })
                   ) {
                     CPUChartInspection(
                       series: series.first { $0.id == item.id } ?? item,
@@ -157,11 +185,12 @@ struct CPUChartBrowser: View {
         Text(status).font(.system(size: 10)).foregroundStyle(theme.secondary).lineLimit(2).help(
           status)
       }
-    }.onChange(of: query) { page = 0 }
-      .onChange(of: paginated) { page = 0 }
-      .onChange(of: series.map(\.id)) { _, ids in
-        if let inspected, !ids.contains(inspected) { self.inspected = nil }
+    }
+    .onChange(of: series.map(\.id)) { _, ids in
+      if let inspected, !ids.contains(inspected) {
+        self.inspected = nil
       }
+    }
   }
 }
 private struct CPUChartTile: View {

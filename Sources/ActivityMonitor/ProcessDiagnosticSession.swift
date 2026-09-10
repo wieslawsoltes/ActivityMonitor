@@ -159,6 +159,7 @@ enum DiagnosticCommand {
   @Published private(set) var row: ProcessRow
   @Published var tab: DiagnosticTab = .overview
   @Published var range = 1
+  let threadChartPresentation = CPUChartPresentation()
   @Published var showsThreadCPU = false {
     didSet {
       if !showsThreadCPU {

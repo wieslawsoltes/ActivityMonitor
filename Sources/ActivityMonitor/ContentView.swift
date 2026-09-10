@@ -9,6 +9,7 @@ struct ContentView: View {
   @AppStorage("showMenuBar") var showMenuBar = false
   @AppStorage("appearance") var appearance = "System"
   private static let machineName = Host.current().localizedName ?? "Mac"
+  @StateObject var cpuPresentation = CPUChartPresentation()
   @State var metric: Metric = .cpu
   @State var range = 1
   @State var query = ""
@@ -227,7 +228,8 @@ struct ContentView: View {
       MonitorOverview(
         metric: metric, range: range, theme: theme,
         width: layout.width - layout.gutter * 2, expanded: layout.expanded,
-        condensed: layout.denseOverview
+        condensed: layout.denseOverview, cpuPresentation: cpuPresentation,
+        viewportHeight: viewportHeight ?? max(0, layout.height - 120)
       )
       .padding(.bottom, layout.denseOverview ? 10 : 24)
       HStack(spacing: 16) {

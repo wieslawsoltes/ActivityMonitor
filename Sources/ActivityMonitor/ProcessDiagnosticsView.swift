@@ -483,7 +483,8 @@ struct ProcessDiagnosticsView: View {
             series: session.threadCPU, range: session.range,
             end: session.threadCPU.flatMap { $0.points.last.map { [$0.date] } ?? [] }.max()
               ?? Date(),
-            theme: theme, threads: true, status: session.threadCPUStatus
+            theme: theme, threads: true, status: session.threadCPUStatus,
+            presentation: session.threadChartPresentation
           )
           .frame(height: 300)
           Text(
@@ -702,7 +703,7 @@ struct ProcessPinView: View {
         CPUChartBrowser(
           series: session.threadCPU, range: 1,
           end: session.threadCPU.first?.points.last?.date ?? Date(), theme: theme, threads: true,
-          status: session.threadCPUStatus
+          status: session.threadCPUStatus, presentation: session.threadChartPresentation
         ).frame(height: 245)
       } else {
         TelemetryChart(

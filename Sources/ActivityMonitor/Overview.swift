@@ -10,14 +10,14 @@ struct MonitorOverview: View {
   var width: CGFloat = 1068
   var expanded = false
   var condensed = false
-  @State var individualCPU = false
-  @State private var processorDetails = false
+  @ObservedObject var cpuPresentation = CPUChartPresentation()
+  var viewportHeight: CGFloat? = nil
   private var dense: Bool { condensed || width < 1068 }
   var body: some View {
     if metric == .gpu {
       GPUOverview(
         range: range, theme: theme, width: width, expanded: expanded, condensed: condensed)
-    } else if metric == .cpu && individualCPU {
+    } else if metric == .cpu && cpuPresentation.individual {
       VStack(spacing: dense ? 10 : 14) {
         DesignCard(theme: theme, padding: dense ? 12 : 19) {
           VStack(alignment: .leading, spacing: 12) {
@@ -28,16 +28,21 @@ struct MonitorOverview: View {
                   theme.secondary)
               }
               Spacer(minLength: 4)
-              CPUChartModePicker(individual: $individualCPU, theme: theme)
+              CPUChartModePicker(individual: $cpuPresentation.individual, theme: theme)
             }
             CPUChartBrowser(
               series: monitor.cpuCores, range: range,
-              end: monitor.lastUpdate ?? Date(), theme: theme, status: monitor.cpuCoreStatus)
+              end: monitor.lastUpdate ?? Date(), theme: theme, status: monitor.cpuCoreStatus,
+              presentation: cpuPresentation)
             Text("Each chart: 0–100% · Select a processor to inspect its history")
               .font(.system(size: 10)).foregroundStyle(theme.tertiary)
           }
-        }.frame(height: dense ? 330 : 350)
-        DisclosureGroup("Breakdown & device details", isExpanded: $processorDetails) {
+        }.frame(
+          height: CPUOverviewGeometry.height(
+            width: width, viewportHeight: viewportHeight,
+            count: cpuPresentation.paginated
+              ? min(12, monitor.cpuCores.count) : monitor.cpuCores.count))
+        DisclosureGroup("Breakdown & device details", isExpanded: $cpuPresentation.details) {
           if width >= 668 {
             HStack(spacing: 14) {
               DesignCard(theme: theme, padding: dense ? 12 : 20) { middleCard }
@@ -99,7 +104,7 @@ struct MonitorOverview: View {
         Spacer(minLength: 4)
         if metric == .cpu {
           VStack(alignment: .trailing, spacing: 4) {
-            CPUChartModePicker(individual: $individualCPU, theme: theme)
+            CPUChartModePicker(individual: $cpuPresentation.individual, theme: theme)
             HStack(spacing: 8) {
               dot("Total", theme.blue)
               dot("System", theme.coral)

@@ -13,6 +13,7 @@ struct MonitorDestination {
 @MainActor final class MenuBarPresentation: ObservableObject {
   @Published var metric: Metric = .cpu
   @Published var range = 1
+  let cpuCharts = CPUChartPresentation()
 }
 struct MenuBarMonitor: View {
   @EnvironmentObject var monitor: Monitor
@@ -75,7 +76,9 @@ struct MenuBarMonitor: View {
             Spacer(minLength: 4)
             HistoryRangePicker(range: $presentation.range, theme: theme)
           }
-          MonitorOverview(metric: metric, range: range, theme: theme, width: 392)
+          MonitorOverview(
+            metric: metric, range: range, theme: theme, width: 392,
+            cpuPresentation: presentation.cpuCharts)
           VStack(spacing: 0) {
             HStack {
               Text(metric == .energy ? "Top applications" : "Top processes").font(
