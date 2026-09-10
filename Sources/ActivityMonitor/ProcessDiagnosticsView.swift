@@ -98,29 +98,20 @@ struct ProcessDiagnosticsView: View {
       header
       Divider()
       HStack(spacing: 0) {
-        List(selection: $session.tab) {
-          Section("Activity") {
-            ForEach(Array(DiagnosticTab.allCases.prefix(7))) { tab in
-              Label(tab.rawValue, systemImage: tab.icon).tag(tab)
-            }
-          }
-          Section("Diagnostics") {
-            ForEach(Array(DiagnosticTab.allCases.dropFirst(7))) { tab in
-              Label(tab.rawValue, systemImage: tab.icon).tag(tab)
-            }
-          }
-        }.listStyle(.sidebar).frame(width: 172)
+        DiagnosticSidebar(selection: $session.tab, theme: theme)
         Divider()
         VStack(alignment: .leading, spacing: 0) {
           contentHeader
-          Divider()
           content.frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         }
       }
       Divider()
       HStack(spacing: 10) {
-        Circle().fill(session.exited ? theme.tertiary : session.paused ? theme.amber : theme.green)
-          .frame(width: 6, height: 6)
+        Circle().fill(
+          session.exited
+            ? theme.tertiary : (session.paused || session.sourcePaused) ? theme.amber : theme.green
+        )
+        .frame(width: 6, height: 6)
         Text(session.state)
         if let status = session.collectionStatus { Text(status).lineLimit(1).help(status) }
         if session.collecting {
@@ -221,31 +212,26 @@ struct ProcessDiagnosticsView: View {
       .background(theme.toolbar)
   }
   private var contentHeader: some View {
-    HStack {
-      VStack(alignment: .leading, spacing: 3) {
-        Text(session.tab.rawValue).font(.system(size: 17, weight: .semibold))
-        if let section = session.sections[session.tab] {
-          Text(section.status).font(.system(size: 10)).foregroundStyle(theme.secondary).lineLimit(2)
-        }
+    HStack(spacing: 12) {
+      VStack(alignment: .leading, spacing: 5) {
+        Text(session.tab.rawValue + (session.tab.metric != nil ? " activity" : ""))
+          .font(.system(size: 24, weight: .semibold)).tracking(-0.6)
+        Text(session.tab.subtitle).font(.system(size: 11)).foregroundStyle(theme.secondary)
+          .lineLimit(2).fixedSize(horizontal: false, vertical: true)
       }
-      Spacer()
+      Spacer(minLength: 0)
       if session.tab.metric != nil {
-        Picker("History", selection: $session.range) {
-          Text("1 min").tag(1)
-          Text("5 min").tag(5)
-          Text("15 min").tag(15)
-        }.pickerStyle(.segmented).labelsHidden().frame(width: 190)
-      } else if [.threads, .files, .connections, .ports, .fileports, .maps, .images].contains(
-        session.tab)
-      {
-        TextField("Filter entries", text: $query).textFieldStyle(.roundedBorder).frame(width: 180)
+        DiagnosticRangePicker(selection: $session.range, theme: theme)
+      } else if session.tab != .overview && session.tab != .reports {
+        TextField("Filter entries", text: $query).textFieldStyle(.roundedBorder).frame(width: 150)
         Button {
           exportSection()
         } label: {
           Image(systemName: "square.and.arrow.up")
-        }.help("Export table as CSV").buttonStyle(MonitorIconButton(theme: theme))
+        }
+        .help("Export table as CSV").buttonStyle(MonitorIconButton(theme: theme))
       }
-    }.padding(.horizontal, 20).frame(height: 62)
+    }.padding(.horizontal, 22).padding(.top, 22).padding(.bottom, 18)
   }
   @ViewBuilder private var content: some View {
     if let metric = session.tab.metric {
