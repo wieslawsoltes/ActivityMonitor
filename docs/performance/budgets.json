@@ -50,6 +50,27 @@
     },
     "chart.GPU.15min": {
       "median_ms": 25
+    },
+    "diagnostics.workspace.15min": {
+      "median_ms": 400
+    },
+    "diagnostics.table.2500": {
+      "median_ms": 150
+    },
+    "cpu.history.4096": {
+      "median_ms": 30
+    },
+    "cpu.grid.12.15min": {
+      "median_ms": 150
+    },
+    "cpu.grid.64.15min": {
+      "median_ms": 350
+    },
+    "mapping.aggregate.16384": {
+      "median_ms": 30
+    },
+    "mapping.chart.16384": {
+      "median_ms": 150
     }
   },
   "memory_growth_bytes": {

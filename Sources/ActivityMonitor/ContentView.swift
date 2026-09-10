@@ -9,6 +9,7 @@ struct ContentView: View {
   @AppStorage("showMenuBar") var showMenuBar = false
   @AppStorage("appearance") var appearance = "System"
   private static let machineName = Host.current().localizedName ?? "Mac"
+  @StateObject var cpuPresentation = CPUChartPresentation()
   @State var metric: Metric = .cpu
   @State var range = 1
   @State var query = ""
@@ -22,8 +23,7 @@ struct ContentView: View {
   @State var stopTargets: [ProcessRow] = []
   @State var showHelp = false
   @State var showGallery = false
-  @State var sampling = false
-  @State var sampleText: String?
+  @State private var diagnosticSession: ProcessDiagnosticSession?
   @FocusState var searchFocused: Bool
   @FocusState var tableFocused: Bool
   @AppStorage("showThreads") var showThreads = true
@@ -176,6 +176,13 @@ struct ContentView: View {
       } message: {
         Text(monitor.error ?? "")
       }
+      .sheet(item: $diagnosticSession) { session in
+        ProcessDiagnosticsView(
+          session: session, center: monitor.diagnostics, close: { diagnosticSession = nil }
+        )
+        .frame(width: 1000, height: 700)
+        .onDisappear { monitor.diagnostics.release(session) }
+      }
       .sheet(isPresented: $showHelp) {
         VStack(alignment: .leading, spacing: 18) {
           Text("A clearer view of your Mac").font(.title2.bold())
@@ -188,24 +195,6 @@ struct ContentView: View {
           Button("Done") { showHelp = false }.keyboardShortcut(.defaultAction)
         }.padding(32).frame(width: min(510, max(360, (NSApp.mainWindow?.frame.width ?? 560) - 48)))
       }
-      .sheet(isPresented: Binding(get: { sampleText != nil }, set: { if !$0 { sampleText = nil } }))
-    {
-      VStack {
-        HStack {
-          Text("Process sample").font(.headline)
-          Spacer()
-          Button("Save…") { saveSample() }
-          Button("Done") { sampleText = nil }
-        }
-        ScrollView {
-          Text(sampleText ?? "").font(.system(size: 11, design: .monospaced)).textSelection(
-            .enabled
-          ).frame(maxWidth: .infinity, alignment: .leading)
-        }
-      }.padding(24).frame(
-        width: min(850, max(360, (NSApp.mainWindow?.frame.width ?? 900) - 48)),
-        height: min(600, max(360, (NSApp.mainWindow?.frame.height ?? 700) - 60)))
-    }
       .background {
         Group {
           Button("") { searchFocused = true }.keyboardShortcut("k")
@@ -239,7 +228,8 @@ struct ContentView: View {
       MonitorOverview(
         metric: metric, range: range, theme: theme,
         width: layout.width - layout.gutter * 2, expanded: layout.expanded,
-        condensed: layout.denseOverview
+        condensed: layout.denseOverview, cpuPresentation: cpuPresentation,
+        viewportHeight: viewportHeight ?? max(0, layout.height - 120)
       )
       .padding(.bottom, layout.denseOverview ? 10 : 24)
       HStack(spacing: 16) {
@@ -251,7 +241,7 @@ struct ContentView: View {
             selection = p.id
             inspector = true
           }, stop: { stopTargets = [$0] }, stopMany: { stopTargets = $0 },
-          searchFocus: $searchFocused)
+          searchFocus: $searchFocused, diagnose: openDiagnostics)
         if inspector && layout.inlineInspector {
           inspectorPanel.frame(width: layout.inspectorWidth)
         }
@@ -260,8 +250,9 @@ struct ContentView: View {
   }
   var inspectorPanel: some View {
     MonitorInspector(
-      process: selected, theme: theme, busy: sampling, close: { inspector = false },
-      sample: sample, files: inspectFiles, reveal: reveal, stop: { stopTargets = [$0] })
+      process: selected, theme: theme, busy: false, close: { inspector = false },
+      sample: sample, files: inspectFiles, reveal: reveal, stop: { stopTargets = [$0] },
+      diagnose: openDiagnostics)
   }
   @ViewBuilder func adaptiveTitlebar(_ layout: MonitorLayout) -> some View {
     if layout.width >= 1350 {
@@ -504,57 +495,20 @@ struct ContentView: View {
     }
     NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: String(cString: buffer))])
   }
+  func openDiagnostics(_ p: ProcessRow, toolWindow: Bool = false) {
+    if toolWindow {
+      monitor.diagnostics.openWindow(p)
+    } else {
+      diagnosticSession = monitor.diagnostics.acquire(p)
+    }
+  }
   func inspectFiles(_ p: ProcessRow) {
-    guard processStillMatches(p) else {
-      monitor.error = "The process has exited."
-      return
-    }
-    sampling = true
-    Task {
-      sampleText = await runDiagnostic("/usr/sbin/lsof", ["-n", "-P", "-p", String(p.id)])
-      sampling = false
-    }
+    openDiagnostics(p)
+    diagnosticSession?.tab = .files
+    diagnosticSession?.refreshDetails(force: true)
   }
   func sample(_ p: ProcessRow) {
-    guard processStillMatches(p) else {
-      monitor.error = "The process has exited."
-      return
-    }
-    sampling = true
-    Task {
-      let result = await runDiagnostic("/usr/bin/sample", [String(p.id), "1", "10"])
-      sampleText = result
-      sampling = false
-    }
-  }
-  func runDiagnostic(_ executable: String, _ arguments: [String]) async -> String {
-    await Task.detached(priority: .utility) {
-      let process = Process()
-      process.executableURL = URL(fileURLWithPath: executable)
-      process.arguments = arguments
-      let pipe = Pipe()
-      process.standardOutput = pipe
-      process.standardError = pipe
-      do {
-        try process.run()
-        DispatchQueue.global().asyncAfter(deadline: .now() + 15) {
-          if process.isRunning { process.terminate() }
-        }
-        let data = pipe.fileHandleForReading.readDataToEndOfFile()
-        process.waitUntilExit()
-        let output = String(data: data, encoding: .utf8) ?? ""
-        return output.isEmpty
-          ? "No output. The process may have exited or macOS may have denied access." : output
-      } catch { return error.localizedDescription }
-    }.value
-  }
-  func saveSample() {
-    let panel = NSSavePanel()
-    panel.nameFieldStringValue = "Process-Sample.txt"
-    if panel.runModal() == .OK, let url = panel.url {
-      do { try (sampleText ?? "").write(to: url, atomically: true, encoding: .utf8) } catch {
-        monitor.error = error.localizedDescription
-      }
-    }
+    openDiagnostics(p)
+    diagnosticSession?.collectReport(.sample)
   }
 }

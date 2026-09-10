@@ -209,3 +209,15 @@ struct GPUDevicePicker: View {
       .help("Choose GPU for the overview; process counters include all reporting devices")
   }
 }
+
+/// Reserve usable process-list space while allowing dense processor grids to grow.
+enum CPUOverviewGeometry {
+  static func height(width: CGFloat, viewportHeight: CGFloat?, count: Int) -> CGFloat {
+    guard let viewportHeight else { return width < 1068 ? 330 : 350 }
+    let columns = max(1, Int(max(1, width - 40) / 150))
+    let rows = (max(1, count) + columns - 1) / columns
+    let desired = 120 + CGFloat(rows) * 72
+    let budget = min(480, max(220, viewportHeight * 0.42))
+    return min(budget, max(220, desired))
+  }
+}

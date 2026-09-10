@@ -137,6 +137,60 @@ final class PerformanceTests: XCTestCase {
         .environmentObject(monitor), size: CGSize(width: 1080, height: 760))
     }
   }
+  @MainActor func testCPUDetailPerformance() throws {
+    try enabled()
+    let end = PerformanceFixture.end
+    let readings = (0..<4096).map {
+      CPUReading(id: String($0), title: "Thread \($0)", user: 20, system: 10)
+    }
+    var history = CPUHistoryStore()
+    for i in 0..<40 { history.append(readings, at: end.addingTimeInterval(Double(i))) }
+    benchmark("cpu.history.4096") {
+      history.append(
+        readings, at: (history.series.first?.points.last?.date ?? end).addingTimeInterval(1))
+      XCTAssertLessThanOrEqual(
+        history.series.reduce(0) { $0 + $1.points.count }, CPUHistoryStore.pointBudget)
+    }
+    let series = (0..<12).map { index in
+      CPUUsageSeries(
+        id: String(index), title: "CPU \(index)", detail: "Performance",
+        points: (0..<901).map {
+          CPUUsagePoint(
+            date: end.addingTimeInterval(Double($0 - 900)), user: Double($0 % 60), system: 10)
+        })
+    }
+    benchmark("cpu.grid.12.15min", iterations: 3) {
+      render(
+        CPUChartBrowser(series: series, range: 15, end: end, theme: .init(dark: true)),
+        size: CGSize(width: 960, height: 400))
+    }
+    let dense = (0..<64).map { index in
+      CPUUsageSeries(
+        id: String(index), title: "CPU \(index)", detail: "Logical processor",
+        points: series[0].points)
+    }
+    benchmark("cpu.grid.64.15min", iterations: 3) {
+      render(
+        CPUChartBrowser(series: dense, range: 15, end: end, theme: .init(dark: true)),
+        size: CGSize(width: 960, height: 400))
+    }
+  }
+  @MainActor func testMappingChartPerformance() throws {
+    try enabled()
+    let records = MappingFixture.records(16384)
+    benchmark("mapping.aggregate.16384") {
+      let data = MappingPlotData.make(
+        records: records, images: true, measure: .resident, kind: .protection)
+      XCTAssertEqual(data.count, 16384)
+      XCTAssertLessThanOrEqual(data.items.count, 9)
+    }
+    benchmark("mapping.chart.16384", iterations: 3) {
+      render(
+        MappingVisualization(
+          section: .init(records: records), query: "", images: true, theme: .init(dark: true)),
+        size: CGSize(width: 800, height: 250))
+    }
+  }
   @MainActor func testStartupAndSupplementarySurfaces() throws {
     try enabled()
     benchmark("startup.models") {
@@ -250,6 +304,45 @@ final class PerformanceTests: XCTestCase {
     report("table.scroll.layout.1000", milliseconds: scrollTimes)
     report("table.refresh.layout.1000", milliseconds: refreshTimes)
   }
+  #if !PERFORMANCE_BASELINE
+    @MainActor func testProcessDiagnosticsSurfaces() throws {
+      try enabled()
+      let monitor = PerformanceFixture.monitor()
+      var row = monitor.rows[0]
+      let session = ProcessDiagnosticSession(row: row)
+      session.tab = .cpu
+      for index in 0...900 {
+        row.cpu = 150 + sin(Double(index) / 20) * 60
+        session.accept(
+          rows: [row], date: PerformanceFixture.end.addingTimeInterval(Double(index - 900)))
+      }
+      session.range = 15
+      benchmark("diagnostics.workspace.15min", iterations: 3) {
+        render(
+          ProcessDiagnosticsView(
+            session: session, center: monitor.diagnostics, persistTableColumns: false, close: {}),
+          size: CGSize(width: 1060, height: 740))
+      }
+      let records = (0..<2500).map {
+        DiagnosticRecord(
+          id: String($0),
+          cells: [
+            "FD": String($0), "Type": "File",
+            "Path": "/Applications/Example.app/Contents/Resources/document-\($0).json",
+            "Size": "128 KB", "Access": "Available",
+          ], numbers: ["FD": Double($0)])
+      }
+      let section = DiagnosticSection(
+        columns: ["FD", "Type", "Path", "Size", "Access"], records: records, status: "2500 entries",
+        date: PerformanceFixture.end)
+      benchmark("diagnostics.table.2500", iterations: 3) {
+        render(
+          DiagnosticTable(
+            section: section, query: "", key: "benchmark", theme: .init(dark: false),
+            persistColumns: false), size: CGSize(width: 900, height: 550))
+      }
+    }
+  #endif
   @MainActor private var renderIndex = 0
   @MainActor private func render<V: View>(_ view: V, size: CGSize) {
     let host = NSHostingView(rootView: view)

@@ -119,6 +119,6 @@ final class AdaptiveLayoutTests: XCTestCase {
     XCTAssertEqual(
       TelemetryData.nearest(Date(timeIntervalSince1970: 11.9), in: samples), points[1].date)
     XCTAssertNil(TelemetryData.nearest(Date(), in: []))
-    XCTAssertEqual(TelemetryData.domain(samples, metric: .cpu), 0...100)
+    XCTAssertEqual(TelemetryData.domain(samples, metric: .cpu, logicalProcessors: 16), 0...1600)
   }
 }
