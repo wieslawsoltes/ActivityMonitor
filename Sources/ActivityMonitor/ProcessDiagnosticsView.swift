@@ -236,70 +236,75 @@ struct ProcessDiagnosticsView: View {
   @ViewBuilder private var content: some View {
     if let metric = session.tab.metric {
       ScrollView {
-        VStack(alignment: .leading, spacing: 20) {
-          HStack(alignment: .firstTextBaseline) {
-            Text(ProcessActivityPresentation.latest(session, metric: metric)).font(
-              .system(size: 32, weight: .medium)
-            ).monospacedDigit()
-            Text(
-              metric == .disk
-                ? "read / second"
-                : metric == .network
-                  ? "received / second"
-                  : metric == .energy
-                    ? "CPU workload" : metric == .memory ? "physical footprint" : "process usage"
-            ).foregroundStyle(theme.secondary)
+        VStack(alignment: .leading, spacing: 16) {
+          activityChart(metric)
+          DiagnosticPanel(theme: theme) {
+            VStack(alignment: .leading, spacing: 14) {
+              panelTitle("Process counters", icon: metric.icon)
+              fields(metricFields(metric))
+              if metric == .memory { detailLink("Inspect memory mappings", tab: .maps) }
+              if metric == .network {
+                detailLink("Inspect connections & listening ports", tab: .connections)
+              }
+              if metric == .disk { detailLink("Inspect open files", tab: .files) }
+              if metric == .cpu { detailLink("Inspect threads", tab: .threads) }
+            }
           }
-          TelemetryChart(
-            samples: ProcessActivityPresentation.samples(session.histories, metric: metric),
-            metric: metric, range: session.range, end: session.histories.last?.date ?? Date(),
-            theme: theme, perProcess: true
-          ).frame(height: 190)
-          Text(ProcessActivityPresentation.note(metric)).font(.system(size: 11)).foregroundStyle(
-            theme.secondary
-          ).fixedSize(horizontal: false, vertical: true)
-          Divider()
-          fields(metricFields(metric))
-          if metric == .memory { Button("Inspect memory mappings") { session.tab = .maps } }
-          if metric == .network {
-            Button("Inspect connections & listening ports") { session.tab = .connections }
-          }
-          if metric == .cpu { Button("Inspect threads") { session.tab = .threads } }
-        }.padding(22)
+        }.padding(.horizontal, 22).padding(.bottom, 22)
       }
     } else if session.tab == .overview {
       ScrollView {
-        VStack(alignment: .leading, spacing: 20) {
-          fields(
-            [
-              .init("Process name", session.row.name),
-              .init("Executable name", session.row.executableName ?? session.row.name),
-            ] + session.fields)
-          Divider()
-          fields(
-            ProcessColumns.catalog.filter { ["sandbox", "restricted", "ports"].contains($0.id) }.map
-            { .init($0.title, ProcessValues.text(session.row, key: $0.id, metric: .cpu)) })
-          Text("Related processes").font(.headline)
-          ForEach(center.related(to: session)) { row in
-            Button {
-              center.openWindow(row)
-            } label: {
-              HStack {
-                Text(row.name)
-                Spacer()
-                Text("PID \(row.id)")
-                Image(systemName: "arrow.up.forward")
+        VStack(alignment: .leading, spacing: 16) {
+          DiagnosticPanel(theme: theme) {
+            HStack(spacing: 18) {
+              summaryValue(
+                "CPU usage", value: ProcessActivityPresentation.latest(session, metric: .cpu))
+              Rectangle().fill(theme.border).frame(width: 1)
+              summaryValue(
+                "Memory", value: ProcessActivityPresentation.latest(session, metric: .memory))
+              Rectangle().fill(theme.border).frame(width: 1)
+              summaryValue(
+                "Threads", value: ProcessValues.text(session.row, key: "threads", metric: .cpu))
+            }.frame(height: 58)
+          }
+          LazyVGrid(
+            columns: [GridItem(.adaptive(minimum: 285), spacing: 16, alignment: .top)],
+            alignment: .leading, spacing: 16
+          ) {
+            ForEach(overviewGroups, id: \.title) { group in
+              DiagnosticPanel(theme: theme) {
+                VStack(alignment: .leading, spacing: 14) {
+                  panelTitle(group.title, icon: group.icon)
+                  fields(group.fields, compact: true)
+                }
               }
-            }.buttonStyle(.plain)
+            }
           }
-          if center.related(to: session).isEmpty {
-            Text("No parent or child process in the current snapshot.").foregroundStyle(
-              theme.secondary)
+          DiagnosticPanel(theme: theme) {
+            VStack(alignment: .leading, spacing: 14) {
+              panelTitle("Related processes", icon: "point.3.connected.trianglepath.dotted")
+              ForEach(center.related(to: session)) { row in
+                Button {
+                  center.openWindow(row)
+                } label: {
+                  HStack(spacing: 10) {
+                    ProcessIcon(pid: row.id, isApp: row.isApp, start: row.start, size: 24)
+                    Text(row.name).lineLimit(1)
+                    Spacer()
+                    Text("PID \(row.id)").foregroundStyle(theme.secondary)
+                    Image(systemName: "arrow.up.forward").foregroundStyle(theme.tertiary)
+                  }.font(.system(size: 12)).padding(8)
+                }.buttonStyle(MonitorSegmentButton(theme: theme))
+              }
+              if center.related(to: session).isEmpty {
+                Text("No parent or child process in the current snapshot.")
+                  .font(.system(size: 12)).foregroundStyle(theme.secondary)
+              }
+            }
           }
-          Text(
-            "Missing values mean macOS denied access or does not expose the counter. Detailed collections refresh every five seconds while this session is live."
-          ).font(.system(size: 11)).foregroundStyle(theme.secondary)
-        }.padding(22)
+          Text("Unavailable values mean macOS restricts access or does not expose the counter.")
+            .font(.system(size: 11)).foregroundStyle(theme.tertiary)
+        }.padding(.horizontal, 22).padding(.bottom, 22)
       }
     } else if session.tab == .reports {
       reports
@@ -336,16 +341,104 @@ struct ProcessDiagnosticsView: View {
       }
     }
   }
-  private func fields(_ values: [DiagnosticField]) -> some View {
+  private func panelTitle(_ title: String, icon: String) -> some View {
+    HStack {
+      Text(title).font(.system(size: 13, weight: .semibold))
+      Spacer()
+      Image(systemName: icon).font(.system(size: 15)).foregroundStyle(theme.tertiary)
+    }
+  }
+  private func summaryValue(_ label: String, value: String) -> some View {
+    VStack(alignment: .leading, spacing: 6) {
+      Text(value).font(.system(size: 25, weight: .medium)).tracking(-0.6).monospacedDigit()
+        .lineLimit(1).minimumScaleFactor(0.7)
+      Text(label).font(.system(size: 11)).foregroundStyle(theme.secondary)
+    }.frame(maxWidth: .infinity, alignment: .leading)
+  }
+  private func detailLink(_ title: String, tab: DiagnosticTab) -> some View {
+    Button {
+      session.tab = tab
+    } label: {
+      HStack {
+        Text(title)
+        Spacer()
+        Image(systemName: "arrow.right")
+      }.padding(.horizontal, 12)
+    }.buttonStyle(MonitorActionButton(theme: theme))
+  }
+  private func activityChart(_ metric: Metric) -> some View {
+    DiagnosticPanel(theme: theme) {
+      VStack(alignment: .leading, spacing: 14) {
+        if metric == .disk || metric == .network {
+          HStack(spacing: 30) {
+            summaryValue(
+              metric == .disk ? "Read / second" : "Receiving / second",
+              value: ProcessActivityPresentation.latest(session, metric: metric))
+            summaryValue(
+              metric == .disk ? "Write / second" : "Sending / second",
+              value: (metric == .disk
+                ? session.histories.last?.written : session.histories.last?.sent)
+                .map { bytes(UInt64(max(0, $0))) + "/s" } ?? "—")
+          }
+        } else {
+          HStack(alignment: .top) {
+            VStack(alignment: .leading, spacing: 5) {
+              Text(
+                metric == .memory
+                  ? "Physical footprint"
+                  : metric == .energy ? "CPU workload" : "Process \(metric.rawValue) usage"
+              )
+              .font(.system(size: 12)).foregroundStyle(theme.secondary)
+              Text(ProcessActivityPresentation.latest(session, metric: metric))
+                .font(.system(size: 34, weight: .medium)).tracking(-1).monospacedDigit()
+            }
+            Spacer()
+            Circle().fill(theme.blue).frame(width: 6, height: 6).padding(.top, 5)
+            Text(metric == .energy ? "Workload" : "Process").font(.system(size: 10))
+              .foregroundStyle(theme.secondary).padding(.top, 2)
+          }
+        }
+        TelemetryChart(
+          samples: ProcessActivityPresentation.samples(session.histories, metric: metric),
+          metric: metric, range: session.range, end: session.histories.last?.date ?? Date(),
+          theme: theme, perProcess: true
+        ).frame(height: 155)
+        Text(ProcessActivityPresentation.note(metric)).font(.system(size: 10))
+          .foregroundStyle(theme.secondary).fixedSize(horizontal: false, vertical: true)
+      }
+    }
+  }
+  private var overviewGroups: [DiagnosticFieldGroup] {
+    let identity = [
+      DiagnosticField("Process name", session.row.name),
+      DiagnosticField("Executable name", session.row.executableName ?? session.row.name),
+    ]
+    let security = ProcessColumns.catalog.filter {
+      ["sandbox", "restricted", "ports"].contains($0.id)
+    }.map {
+      DiagnosticField($0.title, ProcessValues.text(session.row, key: $0.id, metric: .cpu))
+    }
+    return DiagnosticFieldGroup.organize(identity + session.fields + security)
+  }
+  private func fields(_ values: [DiagnosticField], compact: Bool = false) -> some View {
     VStack(spacing: 0) {
       ForEach(Array(values.enumerated()), id: \.offset) { index, field in
-        HStack(alignment: .top, spacing: 18) {
-          Text(field.name).foregroundStyle(theme.secondary).frame(width: 155, alignment: .leading)
-          Text(field.value.isEmpty ? "—" : field.value).frame(
-            maxWidth: .infinity, alignment: .leading
-          ).textSelection(.enabled)
-        }.font(.system(size: 12)).padding(.vertical, 8)
-          .overlay(alignment: .bottom) { if index < values.count - 1 { Divider().opacity(0.4) } }
+        ViewThatFits(in: .horizontal) {
+          HStack(alignment: .firstTextBaseline, spacing: 18) {
+            Text(field.name).foregroundStyle(theme.secondary).fixedSize()
+            Spacer(minLength: 12)
+            Text(field.value.isEmpty ? "—" : field.value).fixedSize()
+          }
+          VStack(alignment: .leading, spacing: 5) {
+            Text(field.name).foregroundStyle(theme.secondary)
+            Text(field.value.isEmpty ? "—" : field.value).fixedSize(
+              horizontal: false, vertical: true)
+          }
+        }.font(.system(size: 12)).monospacedDigit().textSelection(.enabled)
+          .frame(maxWidth: .infinity, alignment: .leading).padding(.vertical, compact ? 9 : 10)
+          .overlay(alignment: .bottom) {
+            if index < values.count - 1 { Rectangle().fill(theme.separator).frame(height: 1) }
+          }
       }
     }
   }

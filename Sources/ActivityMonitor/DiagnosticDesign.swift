@@ -100,3 +100,62 @@ extension DiagnosticTab {
     }
   }
 }
+
+struct DiagnosticFieldGroup {
+  let title: String
+  let icon: String
+  var fields: [DiagnosticField]
+  static func organize(_ fields: [DiagnosticField]) -> [Self] {
+    let categories: [(String, String, Set<String>)] = [
+      (
+        "Identity & paths", "app.badge",
+        [
+          "Process name", "Executable name", "Executable", "Working directory", "Root directory",
+          "Started", "Parent PID", "Process group",
+        ]
+      ),
+      (
+        "Access & security", "lock.shield",
+        [
+          "Effective UID / GID", "Real UID / GID", "Saved UID / GID", "Sandbox", "Sandboxed",
+          "Restricted", "Ports", "Process flags",
+        ]
+      ),
+      (
+        "CPU & scheduling", "cpu",
+        [
+          "State", "Nice", "User CPU time", "System CPU time", "Priority", "Running threads",
+          "Scheduling policy", "Instructions", "CPU cycles", "Context switches",
+        ]
+      ),
+      (
+        "Memory", "memorychip",
+        [
+          "Virtual memory", "Resident memory", "Wired memory", "Peak physical footprint",
+          "Interval peak footprint", "Page faults", "Page-ins", "Copy-on-write faults",
+          "Child page-ins", "Real private memory", "Real shared memory", "Compressed memory",
+          "Purgeable memory",
+        ]
+      ),
+      (
+        "Files & system calls", "arrow.left.arrow.right",
+        [
+          "Open descriptors", "Logical writes", "Mach messages sent", "Mach messages received",
+          "Mach syscalls", "Unix syscalls",
+        ]
+      ),
+    ]
+    var remaining = fields
+    var result: [Self] = []
+    for (title, icon, names) in categories {
+      let group = remaining.filter { names.contains($0.name) }
+      remaining.removeAll { names.contains($0.name) }
+      if !group.isEmpty { result.append(.init(title: title, icon: icon, fields: group)) }
+    }
+    if !remaining.isEmpty {
+      result.append(
+        .init(title: "Resource accounting", icon: "waveform.path.ecg", fields: remaining))
+    }
+    return result
+  }
+}
