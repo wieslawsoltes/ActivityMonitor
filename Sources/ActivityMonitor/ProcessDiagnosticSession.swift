@@ -159,8 +159,41 @@ enum DiagnosticCommand {
   @Published private(set) var row: ProcessRow
   @Published var tab: DiagnosticTab = .overview
   @Published var range = 1
-  @Published var paused = false
-  @Published var sourcePaused = false
+  @Published var showsThreadCPU = false {
+    didSet {
+      if !showsThreadCPU {
+        threadWorker?.cancel()
+        threadTracker.reset()
+        threadEpoch += 1
+      } else {
+        refreshThreadActivity(force: true)
+      }
+    }
+  }
+  @Published private(set) var threadCPU: [CPUUsageSeries] = []
+  @Published private(set) var threadCPUStatus: String?
+  @Published private(set) var collectingThreadCPU = false
+  private var threadHistory = CPUHistoryStore()
+  private var threadTracker = ThreadCPUTracker()
+  private var threadWorker: Task<Void, Never>?
+  private var lastThreadRead = Date.distantPast
+  private var threadEpoch = 0
+  @Published var paused = false {
+    didSet {
+      if paused {
+        threadTracker.reset()
+        threadEpoch += 1
+      }
+    }
+  }
+  @Published var sourcePaused = false {
+    didSet {
+      if sourcePaused {
+        threadTracker.reset()
+        threadEpoch += 1
+      }
+    }
+  }
   @Published private(set) var exited = false
   @Published private(set) var histories: [ProcessActivitySample] = []
   @Published private(set) var fields: [DiagnosticField] = []
@@ -177,20 +210,26 @@ enum DiagnosticCommand {
   private var collectedTab: DiagnosticTab?
   private var collection: Task<Void, Never>?
   private var reportWorker: Task<(String, String), Never>?
+  private let threadReader: @Sendable (ProcessIdentity) -> ThreadCPUSnapshot
   private let reader: @Sendable (ProcessIdentity, DiagnosticTab) -> DiagnosticSnapshot
   init(
     row: ProcessRow,
     reader: @escaping @Sendable (ProcessIdentity, DiagnosticTab) -> DiagnosticSnapshot = {
       DiagnosticCollector.read(identity: $0, tab: $1)
+    },
+    threadReader: @escaping @Sendable (ProcessIdentity) -> ThreadCPUSnapshot = {
+      ThreadCPUReader.read($0)
     }
   ) {
     self.row = row
     self.id = ProcessIdentity(row)
     self.reader = reader
+    self.threadReader = threadReader
   }
   deinit {
     collection?.cancel()
     reportWorker?.cancel()
+    threadWorker?.cancel()
   }
   var state: String {
     exited ? "Exited · Last snapshot" : paused ? "Paused" : sourcePaused ? "Monitor paused" : "Live"
@@ -228,6 +267,33 @@ enum DiagnosticCommand {
     previous = current
     previousDate = date
     row = current
+  }
+  func refreshThreadActivity(force: Bool = false) {
+    guard showsThreadCPU, !collectingThreadCPU, !exited, !paused, !sourcePaused,
+      force || Date().timeIntervalSince(lastThreadRead) >= 2
+    else { return }
+    collectingThreadCPU = true
+    let identity = id
+    let epoch = threadEpoch
+    let read = threadReader
+    threadWorker = Task { [weak self] in
+      let snapshot = await Task.detached(priority: .utility) { read(identity) }
+        .value
+      guard let self else { return }
+      self.collectingThreadCPU = false
+      guard !Task.isCancelled, self.showsThreadCPU, !self.paused, !self.sourcePaused,
+        !self.exited, self.threadEpoch == epoch
+      else { return }
+      self.lastThreadRead = snapshot.date
+      self.threadCPUStatus = snapshot.status
+      if snapshot.available {
+        self.threadHistory.append(self.threadTracker.sample(snapshot), at: snapshot.date)
+      } else {
+        self.threadTracker.reset()
+        self.threadHistory.unavailable(at: snapshot.date)
+      }
+      self.threadCPU = self.threadHistory.series
+    }
   }
   func refreshDetails(force: Bool = false) {
     guard !collecting, !exited, force || (!paused && !sourcePaused) else { return }
@@ -304,11 +370,12 @@ enum DiagnosticCommand {
       var history: [ProcessActivitySample]
       var sections: [String: DiagnosticSection]
       var report: ProcessReport?
+      var threadCPU: [CPUUsageSeries]
     }
     let value = Export(
       identity: id, process: row, status: state, fields: fields, history: histories,
       sections: Dictionary(uniqueKeysWithValues: sections.map { ($0.key.rawValue, $0.value) }),
-      report: report)
+      report: report, threadCPU: threadCPU)
     let encoder = JSONEncoder()
     encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
     encoder.dateEncodingStrategy = .iso8601

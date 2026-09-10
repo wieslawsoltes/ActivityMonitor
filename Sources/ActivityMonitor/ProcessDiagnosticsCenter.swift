@@ -19,6 +19,7 @@ import SwiftUI
       for session in self.sessions.values {
         session.sourcePaused = paused
         session.accept(rows: monitor.rows, date: date)
+        session.refreshThreadActivity()
         if (self.detailLeases[session.id] ?? 0) > 0 { session.refreshDetails() }
       }
     }
