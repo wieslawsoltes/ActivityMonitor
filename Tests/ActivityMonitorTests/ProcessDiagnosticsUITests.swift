@@ -108,6 +108,9 @@ import XCTest
           host.cacheDisplay(in: host.bounds, to: bitmap)
           XCTAssertGreaterThan(bitmap.pixelsWide, 700, "\(tab) \(dark)")
           XCTAssertEqual(host.bounds.width, size.width, accuracy: 1)
+          if tab.metric == nil && tab != .overview && tab != .reports {
+            XCTAssertNotNil(descendant(host, NSTableView.self), "Missing table for \(tab)")
+          }
           if let table = descendant(host, NSTableView.self) {
             XCTAssertEqual(table.numberOfRows, 2500)
             XCTAssertTrue(table.allowsColumnResizing)

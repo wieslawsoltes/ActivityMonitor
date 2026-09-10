@@ -35,6 +35,7 @@ struct DiagnosticSidebar: View {
       ForEach(tabs) { tab in
         Button {
           selection = tab
+          focused = tab
         } label: {
           HStack(spacing: 10) {
             Image(systemName: tab.icon).font(.system(size: 13))
@@ -45,6 +46,7 @@ struct DiagnosticSidebar: View {
           }.padding(.horizontal, 10).frame(height: 33)
         }.buttonStyle(MonitorSegmentButton(theme: theme, active: selection == tab))
           .accessibilityAddTraits(selection == tab ? .isSelected : [])
+          .focusable()
           .focused($focused, equals: tab).id(tab)
           .onKeyPress(.downArrow) { move(from: tab, offset: 1) }
           .onKeyPress(.upArrow) { move(from: tab, offset: -1) }
