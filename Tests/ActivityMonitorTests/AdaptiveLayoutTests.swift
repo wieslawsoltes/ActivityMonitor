@@ -91,7 +91,7 @@ final class AdaptiveLayoutTests: XCTestCase {
       ["primary", "pid"])
     XCTAssertEqual(
       ProcessColumnPolicy.visible(columns, metric: .gpu, width: 700, sort: "user").map(\.id),
-      ["primary", "gpuTime", "pid", "user"])
+      ["primary", "gpuTime", "cpu", "memory", "pid", "user"])
     XCTAssertFalse(
       ProcessColumnPolicy.visible(
         columns.filter { $0.id != "gpuTime" }, metric: .gpu, width: 700, sort: "primary"

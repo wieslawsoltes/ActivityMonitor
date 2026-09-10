@@ -31,7 +31,7 @@ Keep an eye on performance, understand resource usage, and find the processes th
 ## Find the detail that matters
 
 - **Find a process quickly.** Find apps by their macOS display names—including virtual machine names—or search by executable, PID or user. Choose from 28 column types in every view, with choices saved per view. Additional columns stay hidden until you enable them.
-- **Personal layouts.** Resize header dividers, double-click to fit contents, and drag columns into your preferred order. Each view remembers its widths, order and visible columns. Select ranges or multiple processes, copy rows, and explore parent/child process trees.
+- **Personal layouts.** Default columns fit the available width without unnecessary horizontal scrolling. Resize header dividers, double-click to fit contents, and drag columns into your preferred order. Each view remembers its widths, order and visible columns. Select ranges or multiple processes, copy rows, and explore parent/child process trees.
 - **Look closer.** Inspect a process, copy its PID, reveal its executable, view open files or capture a stack sample.
 - **Take action.** Quit or force quit your processes, with confirmation before termination.
 - **Follow changes.** Switch between one-, five- and fifteen-minute histories, adjust the refresh interval or pause the view.
@@ -51,6 +51,11 @@ Choose light, dark or system appearance. The process inspector sits beside wide 
 ## Fits your workspace
 
 Keep the familiar three-panel overview at the default size, use a compact window alongside other apps, or expand for larger histories and more process detail. Smaller and shorter windows use compact charts, tighter summary panels and streamlined controls to leave more room for processes. Narrow windows offer expandable breakdowns and access to the full column set. Hover over a chart to inspect a sample. With macOS **Keyboard navigation** enabled, use Tab to reach a chart and the arrow keys to inspect its history.
+
+
+| Automatically fitted columns · Light | Automatically fitted columns · Dark |
+| :---: | :---: |
+| ![Fitted process columns in light appearance](docs/screenshots/v1.4.1/cpu-light.jpg) | ![Fitted process columns in dark appearance](docs/screenshots/v1.4.1/cpu-dark.jpg) |
 
 The menu-bar monitor brings all six views into a compact popover. Change the history range, select a GPU, pause monitoring, or open a process in the main window. Both surfaces share the same live session.
 

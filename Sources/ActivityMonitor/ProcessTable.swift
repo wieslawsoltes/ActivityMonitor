@@ -61,10 +61,10 @@ struct MonitorProcessTable: View {
     }
   }
   var columns: [ProcessColumn] {
-    guard availableWidth < 900, !allColumnsVisible else { return allColumns }
+    guard !allColumnsVisible else { return allColumns }
     let automatic = Set(
       ProcessColumnPolicy.visible(
-        allColumns, metric: metric, width: availableWidth, sort: sort
+        allColumns, metric: metric, width: viewportWidth ?? availableWidth, sort: sort
       ).map(\.id))
     return allColumns.filter {
       automatic.contains($0.id) || preferences.explicitlyEnabled(metric).contains($0.id)
@@ -512,7 +512,7 @@ struct MonitorProcessTable: View {
         }
       }.font(.system(size: 10, weight: sort == key ? .semibold : .regular)).foregroundStyle(
         sort == key ? theme.text : theme.secondary
-      ).frame(maxWidth: .infinity, alignment: alignment).padding(.horizontal, 16)
+      ).frame(maxWidth: .infinity, alignment: alignment).padding(.horizontal, 10)
         .frame(height: 36).contentShape(Rectangle())
     }.buttonStyle(MonitorSegmentButton(theme: theme, radius: 0)).help(
       unavailableColumn(key)
@@ -678,7 +678,7 @@ private struct ProcessTableRow: View, Equatable {
           column.id == "primary" && (metric == .cpu || metric == .memory || metric == .gpu)
         let color = highlighted ? theme.blue : primary ? theme.text : theme.secondary
         let cellText = ProcessCellText.truncate(
-          text(row, column.id), width: cellWidth - (highlighted ? 46 : 32),
+          text(row, column.id), width: cellWidth - (highlighted ? 34 : 20),
           font: .monospacedDigitSystemFont(
             ofSize: column.id == "user" ? 11 : 12, weight: primary ? .medium : .regular))
         let label = Text(cellText)
@@ -694,17 +694,17 @@ private struct ProcessTableRow: View, Equatable {
         cellContext.clip(
           to: Path(CGRect(x: x + 10, y: 0, width: max(0, cellWidth - 20), height: 41)))
         if highlighted {
-          let pillWidth = min(cellWidth - 24, textSize.width + 14)
+          let pillWidth = min(cellWidth - 20, textSize.width + 14)
           cellContext.fill(
             Path(
               roundedRect: CGRect(
-                x: x + cellWidth - 16 - pillWidth, y: 8.5, width: pillWidth, height: 24),
+                x: x + cellWidth - 10 - pillWidth, y: 8.5, width: pillWidth, height: 24),
               cornerRadius: 3), with: .color(theme.blue.opacity(0.095)))
         }
         let leading = column.id == "user"
         cellContext.draw(
           resolved,
-          at: CGPoint(x: leading ? x + 16 : x + cellWidth - (highlighted ? 23 : 16), y: 20.5),
+          at: CGPoint(x: leading ? x + 10 : x + cellWidth - (highlighted ? 17 : 10), y: 20.5),
           anchor: leading ? .leading : .trailing)
         x += cellWidth
       }
@@ -720,11 +720,35 @@ enum ProcessColumnPolicy {
   static func visible(_ columns: [ProcessColumn], metric: Metric, width: CGFloat, sort: String)
     -> [ProcessColumn]
   {
-    var keys: Set<String> = [metric == .network ? "received" : "primary", "pid", sort]
-    if width >= 520 {
-      keys.insert(
-        metric == .gpu
-          ? "gpuTime" : metric == .network ? "sent" : metric == .disk ? "secondary" : "memory")
+    let budget = max(0, width - ProcessColumnLayout.nameMinimum(width))
+    let minimum = Dictionary(
+      uniqueKeysWithValues: columns.map { ($0.id, ProcessColumnLayout.minimum($0, metric: metric)) }
+    )
+    if minimum.values.reduce(0, +) <= budget { return columns }
+    let primary = metric == .network ? "received" : "primary"
+    var keys = Set([minimum[sort] != nil ? sort : primary].filter { minimum[$0] != nil })
+    var used = keys.reduce(CGFloat(0)) { $0 + (minimum[$1] ?? 0) }
+    if let primaryWidth = minimum[primary], !keys.contains(primary), used + primaryWidth <= budget {
+      keys.insert(primary)
+      used += primaryWidth
+    }
+    if let pidWidth = minimum["pid"], !keys.contains("pid"), used + pidWidth <= budget {
+      keys.insert("pid")
+      used += pidWidth
+    }
+    let priorities: [String]
+    switch metric {
+    case .gpu: priorities = ["gpuTime", "memory", "cpu", "kind", "user"]
+    case .network: priorities = ["sent", "packetsIn", "packetsOut", "user"]
+    case .disk: priorities = ["secondary", "user"]
+    case .energy: priorities = ["time", "sleep", "nap", "user"]
+    default:
+      priorities = ["memory", "time", "threads", "ports", "kind", "gpu", "cpu", "resident", "user"]
+    }
+    for key in priorities + columns.map(\.id) where !keys.contains(key) {
+      guard let cost = minimum[key], used + cost <= budget else { continue }
+      keys.insert(key)
+      used += cost
     }
     return columns.filter { keys.contains($0.id) }
   }

@@ -47,3 +47,11 @@ Compact column sizing with application display names, live process data, and hid
 | Light | Dark |
 | :---: | :---: |
 | ![CPU process list in light appearance](v1.4/cpu-light.jpg) | ![CPU process list in dark appearance](v1.4/cpu-dark.jpg) |
+
+## Automatic column fitting · 1.4.1
+
+Default CPU columns at a narrower window size, with the User column visible and no horizontal scrollbar. Captured from the installed universal app on September 10, 2026.
+
+| Light | Dark |
+| :---: | :---: |
+| ![Automatically fitted CPU columns, light](v1.4.1/cpu-light.jpg) | ![Automatically fitted CPU columns, dark](v1.4.1/cpu-dark.jpg) |

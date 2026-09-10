@@ -22,13 +22,12 @@ struct ProcessColumnWidths {
   mutating func resize(
     _ key: String, metric: Metric, columns: [ProcessColumn], viewport: CGFloat, to width: CGFloat
   ) {
-    // A divider drag must move that divider, not compensate by moving the name
-    // column's opposite edge. Freeze its current automatic width on first resize.
-    if key != "name", self.width("name", metric: metric) == nil {
-      let name = ProcessColumnLayout(
-        viewport: viewport, metric: metric, columns: columns, saved: self
-      ).name
-      set("name", metric: metric, width: name)
+    // Freeze the current fitted widths on the first manual resize so neighboring
+    // columns do not spring back to their preferred sizes during a divider drag.
+    let current = ProcessColumnLayout(
+      viewport: viewport, metric: metric, columns: columns, saved: self)
+    for columnKey in current.order where self.width(columnKey, metric: metric) == nil {
+      set(columnKey, metric: metric, width: current.width(columnKey))
     }
     set(key, metric: metric, width: width)
   }
@@ -46,17 +45,55 @@ struct ProcessColumnLayout: Equatable {
     order: ProcessColumnOrder = ProcessColumnOrder()
   ) {
     self.order = order.ordered(["name"] + columns.map(\.id), metric: metric)
-    widths = Dictionary(
+    var measured = Dictionary(
       uniqueKeysWithValues: columns.map { column in
         (
           column.id,
           saved.width(column.id, metric: metric) ?? Self.preferred(column, metric: metric)
         )
       })
-    let metrics = widths.values.reduce(0, +)
-    name =
-      saved.width("name", metric: metric) ?? max(viewport >= 900 ? 300 : 140, viewport - metrics)
-    total = max(viewport, name + metrics)
+    let nameFloor = Self.nameMinimum(viewport)
+    if saved.width("name", metric: metric) == nil {
+      let deficit = max(0, nameFloor + measured.values.reduce(0, +) - viewport)
+      let capacities = Dictionary(
+        uniqueKeysWithValues: columns.map { column in
+          (
+            column.id,
+            saved.width(column.id, metric: metric) == nil
+              ? max(0, measured[column.id]! - Self.minimum(column, metric: metric)) : 0
+          )
+        })
+      let capacity = capacities.values.reduce(0, +)
+      if deficit > 0, capacity > 0 {
+        for column in columns {
+          measured[column.id]! -= min(1, deficit / capacity) * capacities[column.id]!
+        }
+      }
+    }
+    widths = measured
+    let metrics = measured.values.reduce(0, +)
+    name = saved.width("name", metric: metric) ?? max(nameFloor, viewport - metrics)
+    let content = name + metrics
+    total = content - viewport < 0.01 ? viewport : content
+  }
+
+  static func nameMinimum(_ viewport: CGFloat) -> CGFloat {
+    min(240, max(180, viewport * 0.20))
+  }
+
+  /// Readable value widths, not a fixed allowance for every header and sort arrow.
+  static func minimum(_ column: ProcessColumn, metric: Metric) -> CGFloat {
+    switch ProcessColumns.canonical(column.id, metric: metric) {
+    case "cpu", "gpu": return 78
+    case "pid", "ports", "threads": return 60
+    case "kind", "nap", "sandbox", "restricted", "sleep", "suddenTermination": return 60
+    case "time", "gpuTime": return 86
+    case "user": return 100
+    case "memory", "resident", "privateMemory", "sharedMemory", "purgeable", "compressed",
+      "written", "read", "received", "sent":
+      return column.id == "primary" || column.id == "received" ? 110 : 96
+    default: return 88
+    }
   }
 
   func width(_ key: String) -> CGFloat { key == "name" ? name : widths[key] ?? 100 }
@@ -66,24 +103,27 @@ struct ProcessColumnLayout: Equatable {
     let key = ProcessColumns.canonical(column.id, metric: metric)
     let base: CGFloat
     switch key {
-    case "cpu", "gpu": base = 82
-    case "threads", "ports", "pid": base = 76
-    case "kind", "nap", "sandbox", "restricted": base = 88
-    case "user": base = 140
-    case "time", "gpuTime": base = 112
-    default: base = 110
+    case "cpu", "gpu": base = 78
+    case "threads", "ports", "pid": base = 64
+    case "kind", "nap", "sandbox", "restricted": base = 70
+    case "user": base = 116
+    case "memory", "resident", "privateMemory", "sharedMemory", "purgeable", "compressed",
+      "written", "read", "received", "sent":
+      base = 112
+    case "time", "gpuTime": base = 96
+    default: base = 100
     }
     let title = (column.title as NSString).size(withAttributes: [
       .font: NSFont.systemFont(ofSize: 10, weight: .semibold)
     ]).width
-    return max(base, ceil(title) + 46)
+    return max(base, ceil(title) + 32)
   }
 
   static func fitted(key: String, title: String, metric: Metric, rows: [ProcessRow]) -> CGFloat {
     let header =
       (title as NSString).size(withAttributes: [
         .font: NSFont.systemFont(ofSize: 10, weight: .semibold)
-      ]).width + 46
+      ]).width + 32
     let font =
       key == "name"
       ? NSFont.systemFont(ofSize: 12)
@@ -93,7 +133,7 @@ struct ProcessColumnLayout: Equatable {
       return max(width, (text as NSString).size(withAttributes: [.font: font]).width)
     }
     return ProcessColumnWidths.clamp(
-      ceil(max(header, content + (key == "name" ? 68 : 48))), key: key)
+      ceil(max(header, content + (key == "name" ? 68 : 34))), key: key)
   }
 }
 
