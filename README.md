@@ -15,7 +15,7 @@ Keep an eye on performance, understand resource usage, and find the processes th
 
 </div>
 
-![Activity Monitor in light appearance](docs/screenshots/v1.1/cpu-light.jpg)
+![Activity Monitor in light appearance](docs/screenshots/v1.4/cpu-light.jpg)
 
 ## Six views. One clear picture.
 
@@ -30,7 +30,8 @@ Keep an eye on performance, understand resource usage, and find the processes th
 
 ## Find the detail that matters
 
-- **Find a process quickly.** Search by name, PID or user; filter and sort the list; choose the columns you need.
+- **Find a process quickly.** Find apps by their macOS display names—including virtual machine names—or search by executable, PID or user. Choose from 28 column types in every view, with choices saved per view. Additional columns stay hidden until you enable them.
+- **Personal layouts.** Resize header dividers, double-click to fit contents, and drag columns into your preferred order. Each view remembers its widths, order and visible columns. Select ranges or multiple processes, copy rows, and explore parent/child process trees.
 - **Look closer.** Inspect a process, copy its PID, reveal its executable, view open files or capture a stack sample.
 - **Take action.** Quit or force quit your processes, with confirmation before termination.
 - **Follow changes.** Switch between one-, five- and fifteen-minute histories, adjust the refresh interval or pause the view.
@@ -41,7 +42,7 @@ Keep an eye on performance, understand resource usage, and find the processes th
 
 Choose light, dark or system appearance. The process inspector sits beside wide workspaces and opens over compact windows.
 
-![Activity Monitor in dark appearance](docs/screenshots/v1.1/cpu-dark.jpg)
+![Activity Monitor in dark appearance](docs/screenshots/v1.4/cpu-dark.jpg)
 
 *Screenshots show the running app with real system data.*
 
@@ -109,7 +110,7 @@ No accounts, telemetry or uploads. Reports and exports are saved to a location y
 
 The CPU overview measures total capacity on a 0–100% scale. Process CPU percentages use 100% per logical processor and can exceed 100%.
 
-macOS restricts some process information; unavailable values appear as **—**. The Energy view shows **CPU workload**, not Apple’s proprietary Energy Impact score. GPU counters appear where the graphics driver exposes them; per-process packet counts remain unavailable. Disk totals cover readable processes; network totals can differ from individual process counters. Histories begin at launch and stay in memory for up to fifteen minutes.
+macOS restricts some process information; unavailable values appear as **—**. The Energy view shows **CPU workload**, not Apple’s proprietary Energy Impact score. GPU counters appear where the graphics driver exposes them. App Nap, Sudden Termination and Apple’s Energy Impact score display **—** when selected. [Column details and availability](docs/process-columns.md) explain each measurement. Disk totals cover readable processes; network totals can differ from individual process counters. Histories begin at launch and stay in memory for up to fifteen minutes.
 
 [Measurement details](docs/METRICS.md) · [Report an issue](https://github.com/wieslawsoltes/ActivityMonitor/issues) · [Development guide](DEVELOPMENT.md)
 

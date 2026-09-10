@@ -163,7 +163,8 @@ final class MonitorTests: XCTestCase {
       metric: .network, query: "", filter: "All processes", sort: "received", descending: true)
     XCTAssertEqual(query.apply([a, b]).map(\.id), [101, 100])
     a.networkReceived = 20
-    XCTAssertEqual(query.apply([a, b]).map(\.id), [101, 100])
+    // Equal values use ascending PID in both directions, consistently across columns.
+    XCTAssertEqual(query.apply([a, b]).map(\.id), [100, 101])
     query.descending = false
     XCTAssertEqual(query.apply([b, a]).map(\.id), [100, 101])
   }

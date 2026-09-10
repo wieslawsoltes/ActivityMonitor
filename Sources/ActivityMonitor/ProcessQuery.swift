@@ -7,60 +7,45 @@ struct ProcessQuery: Equatable {
   var filter: String
   var sort: String
   var descending: Bool
+  var selected: Set<Int32> = []
+  static let filters = [
+    "All processes", "All processes, hierarchically", "My processes", "System processes",
+    "Other users’ processes", "Active processes", "Inactive processes", "GPU processes",
+    "Windowed processes", "Selected processes", "Applications",
+  ]
+  func matchesFilter(_ p: ProcessRow) -> Bool {
+    switch filter {
+    case "All processes", "All processes, hierarchically": return true
+    case "My processes": return p.uid == getuid()
+    case "System processes": return p.uid == 0
+    case "Other users’ processes": return p.uid != getuid()
+    case "Active processes": return p.accessible && p.cpu > 0
+    case "Inactive processes": return p.accessible && p.cpu == 0
+    case "GPU processes": return (p.gpuPercent ?? 0) > 0
+    case "Windowed processes", "Applications": return p.isApp
+    case "Selected processes": return selected.contains(p.id)
+    default: return true
+    }
+  }
   func apply(_ rows: [ProcessRow]) -> [ProcessRow] {
     rows.filter { p in
       (query.isEmpty || p.name.localizedCaseInsensitiveContains(query)
+        || (p.executableName?.localizedCaseInsensitiveContains(query) ?? false)
         || p.user.localizedCaseInsensitiveContains(query) || String(p.id).contains(query))
-        && (filter == "All processes" || filter == "My processes" && p.uid == getuid()
-          || filter == "System processes" && p.uid == 0 || filter == "Applications" && p.isApp)
+        && matchesFilter(p)
     }.sorted { a, b in
-      if a.id == b.id { return false }
-      if sort == "gpu" || sort == "gpuTime" || (sort == "primary" && metric == .gpu) {
-        let av = sort == "gpuTime" ? a.gpuTime : a.gpuPercent
-        let bv = sort == "gpuTime" ? b.gpuTime : b.gpuPercent
-        switch (av, bv) {
-        case (let aValue?, let bValue?):
-          return aValue == bValue ? a.id < b.id : descending ? aValue > bValue : aValue < bValue
-        case (_?, nil): return true
-        case (nil, _?): return false
-        case (nil, nil): return a.id < b.id
-        }
+      guard a.id != b.id else { return false }
+      let av = ProcessValues.value(a, key: sort, metric: metric)
+      let bv = ProcessValues.value(b, key: sort, metric: metric)
+      switch (av, bv) {
+      case (let av?, let bv?):
+        let comparison = av.compare(bv)
+        if comparison == .orderedSame { return a.id < b.id }
+        return descending ? comparison == .orderedDescending : comparison == .orderedAscending
+      case (_?, nil): return true
+      case (nil, _?): return false
+      case (nil, nil): return a.id < b.id
       }
-      let result: Bool
-      switch sort {
-      case "name":
-        let comparison = a.name.localizedStandardCompare(b.name)
-        result = comparison == .orderedSame ? a.id < b.id : comparison == .orderedAscending
-      case "received":
-        result =
-          (a.networkReceived ?? 0) == (b.networkReceived ?? 0)
-          ? a.id < b.id : (a.networkReceived ?? 0) < (b.networkReceived ?? 0)
-      case "sent":
-        result =
-          (a.networkSent ?? 0) == (b.networkSent ?? 0)
-          ? a.id < b.id : (a.networkSent ?? 0) < (b.networkSent ?? 0)
-      case "kind": result = a.kind == b.kind ? a.id < b.id : a.kind < b.kind
-      case "pid": result = a.id < b.id
-      case "user": result = a.user == b.user ? a.id < b.id : a.user < b.user
-      case "threads": result = a.threads == b.threads ? a.id < b.id : a.threads < b.threads
-      case "cpu": result = a.cpu == b.cpu ? a.id < b.id : a.cpu < b.cpu
-      case "resident": result = a.resident == b.resident ? a.id < b.id : a.resident < b.resident
-      case "memory": result = a.memory == b.memory ? a.id < b.id : a.memory < b.memory
-      case "time": result = a.cpuTime == b.cpuTime ? a.id < b.id : a.cpuTime < b.cpuTime
-      case "secondary": result = a.read == b.read ? a.id < b.id : a.read < b.read
-      default:
-        let av = value(a)
-        let bv = value(b)
-        result = av == bv ? a.id < b.id : av < bv
-      }
-      return descending ? !result : result
-    }
-  }
-  func value(_ p: ProcessRow) -> Double {
-    switch metric {
-    case .memory: return Double(p.memory)
-    case .disk: return Double(p.written)
-    default: return p.cpu
     }
   }
 }
