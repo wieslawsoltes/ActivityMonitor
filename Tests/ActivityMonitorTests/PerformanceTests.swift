@@ -175,6 +175,22 @@ final class PerformanceTests: XCTestCase {
         size: CGSize(width: 960, height: 400))
     }
   }
+  @MainActor func testMappingChartPerformance() throws {
+    try enabled()
+    let records = MappingFixture.records(16384)
+    benchmark("mapping.aggregate.16384") {
+      let data = MappingPlotData.make(
+        records: records, images: true, measure: .resident, kind: .protection)
+      XCTAssertEqual(data.count, 16384)
+      XCTAssertLessThanOrEqual(data.items.count, 9)
+    }
+    benchmark("mapping.chart.16384", iterations: 3) {
+      render(
+        MappingVisualization(
+          section: .init(records: records), query: "", images: true, theme: .init(dark: true)),
+        size: CGSize(width: 800, height: 250))
+    }
+  }
   @MainActor func testStartupAndSupplementarySurfaces() throws {
     try enabled()
     benchmark("startup.models") {

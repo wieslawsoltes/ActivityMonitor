@@ -65,6 +65,12 @@
     },
     "cpu.grid.64.15min": {
       "median_ms": 350
+    },
+    "mapping.aggregate.16384": {
+      "median_ms": 30
+    },
+    "mapping.chart.16384": {
+      "median_ms": 150
     }
   },
   "memory_growth_bytes": {
