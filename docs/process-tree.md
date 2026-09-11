@@ -4,6 +4,12 @@ Choose **Tree** beside the process count to see which processes belong to one an
 
 List is the default. Your choice is remembered across app launches. During a monitoring session, branch expansion survives switching between List and Tree, changing tabs, and resizing the window.
 
+| List | Tree |
+| --- | --- |
+| ![Search matches in the flat process list](screenshots/process-tree/list-light.png) | ![The same search with parent context and expanded process families](screenshots/process-tree/tree-light.png) |
+
+[View dark and compact screenshots](screenshots/process-tree/README.md), captured from the running app with real process data.
+
 ## Explore a branch
 
 - Click a disclosure to expand or collapse a process. **Option-click** includes every nested branch.
