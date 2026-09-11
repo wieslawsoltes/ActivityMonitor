@@ -225,6 +225,35 @@ final class ProcessTreeTests: XCTestCase {
       ["Workspace\t10", "Build service\t20", "Compiler worker\t30"])
   }
 
+  func testFilteringOutSelectionDoesNotSelectAnUnrelatedAncestor() {
+    let state = ProcessTreePresentation()
+    let rows = ProcessTreeFixture.rows
+    state.update(rows, query: ProcessTreeFixture.query())
+    state.selectedStarts = [30: 100]
+    let selection = ProcessListSelection(ids: [30], anchor: 30, lead: 30)
+    state.update(rows, query: ProcessTreeFixture.query("Preview"))
+    XCTAssertEqual(state.entries.map(\.id), [10, 50])
+    let filtered = state.reconcile(selection, visible: state.entries, source: rows)
+    XCTAssertTrue(filtered.ids.isEmpty)
+    XCTAssertNil(filtered.lead)
+    state.update(rows, query: ProcessTreeFixture.query())
+    let list = state.reconcile(
+      selection, visible: Array(state.entries.prefix(1)), source: rows, hierarchical: false)
+    XCTAssertTrue(list.ids.isEmpty)
+    XCTAssertNil(list.lead)
+  }
+  func testTreeCSVKeepsVisibleOrderAndParentIDsWithoutChangingListSchema() {
+    let tree = ProcessTreeSnapshot.build(
+      ProcessTreeFixture.rows, query: ProcessTreeFixture.query("Compiler"))
+    let rows = tree.visible(collapsed: []).map(\.row)
+    let csv = processCSV(rows, includeHierarchy: true).components(separatedBy: "\n")
+    XCTAssertTrue(csv[0].hasSuffix(",Parent PID"))
+    XCTAssertEqual(
+      csv.dropFirst().map { $0.components(separatedBy: ",").last! }, ["-1", "10", "20"])
+    XCTAssertTrue(csv[1].hasPrefix("\"Workspace\",10,"))
+    XCTAssertFalse(processCSV(rows).components(separatedBy: "\n")[0].contains("Parent PID"))
+  }
+
   func testNameColumnReservesReadableSpaceAtAnyDepthAndFitsIndentation() {
     for width: CGFloat in [140, 180, 240, 600, 1200] {
       XCTAssertLessThanOrEqual(

@@ -228,7 +228,8 @@ final class ProcessTreePresentation: ObservableObject {
   }
 
   func reconcile(
-    _ selection: ProcessListSelection, visible: [ProcessTreeEntry], source: [ProcessRow]
+    _ selection: ProcessListSelection, visible: [ProcessTreeEntry], source: [ProcessRow],
+    hierarchical: Bool = true
   ) -> ProcessListSelection {
     let starts = Dictionary(
       source.map { ($0.id, $0.start) }, uniquingKeysWith: { first, _ in first })
@@ -238,7 +239,11 @@ final class ProcessTreePresentation: ObservableObject {
     let visibleIDs = Set(visible.map(\.id))
     var result = selection
     result.ids = alive.intersection(visibleIDs)
-    if let lead = selection.lead, alive.contains(lead), !visibleIDs.contains(lead) {
+    // Only a collapsed descendant moves to an ancestor. Filtering out a process
+    // must not silently select a root belonging to a different search result.
+    if hierarchical, let lead = selection.lead, alive.contains(lead), !visibleIDs.contains(lead),
+      snapshot.entries.contains(where: { $0.id == lead })
+    {
       var cursor = snapshot.parents[lead]
       while let parent = cursor, !visibleIDs.contains(parent) { cursor = snapshot.parents[parent] }
       if let parent = cursor {

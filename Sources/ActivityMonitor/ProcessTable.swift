@@ -577,7 +577,8 @@ struct MonitorProcessTable: View {
   func reconcileSelection() {
     let current = ProcessListSelection(
       ids: selectedIDs, anchor: tree.selectionAnchor, lead: selection)
-    applySelection(tree.reconcile(current, visible: entries, source: sourceRows))
+    applySelection(
+      tree.reconcile(current, visible: entries, source: sourceRows, hierarchical: hierarchy))
   }
   func selectOnly(_ id: Int32) {
     applySelection(ProcessListSelection(ids: [id], anchor: id, lead: id))

@@ -296,7 +296,9 @@ struct ContentView: View {
             }
             .buttonStyle(MonitorIconButton(theme: theme)).help(monitor.paused ? "Resume" : "Pause")
             Menu {
-              Button("Export visible processes…") { monitor.export(visibleProcesses) }
+              Button("Export visible processes…") {
+                monitor.export(visibleProcesses, includeHierarchy: processViewMode == .tree)
+              }
               Button("Export JSON snapshot…") { monitor.exportJSON(visibleProcesses) }
               Button("Export GPU snapshot & history…") { monitor.exportGPU(visibleProcesses) }
               Divider()
@@ -368,7 +370,7 @@ struct ContentView: View {
             Image(systemName: monitor.paused ? "play" : "pause")
           }.buttonStyle(MonitorIconButton(theme: theme)).help(monitor.paused ? "Resume" : "Pause")
           Button {
-            monitor.export(visibleProcesses)
+            monitor.export(visibleProcesses, includeHierarchy: processViewMode == .tree)
           } label: {
             Image(systemName: "square.and.arrow.up")
           }.buttonStyle(MonitorIconButton(theme: theme)).help("Export visible processes")

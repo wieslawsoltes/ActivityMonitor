@@ -352,12 +352,12 @@ final class Collector: @unchecked Sendable {
     }
   }
 
-  func export(_ rows: [ProcessRow]) {
+  func export(_ rows: [ProcessRow], includeHierarchy: Bool = false) {
     let panel = NSSavePanel()
     panel.nameFieldStringValue = "Activity-Monitor.csv"
     panel.allowedContentTypes = [.commaSeparatedText]
     if panel.runModal() == .OK, let url = panel.url {
-      let csv = processCSV(rows)
+      let csv = processCSV(rows, includeHierarchy: includeHierarchy)
       do { try csv.write(to: url, atomically: true, encoding: .utf8) } catch {
         self.error = error.localizedDescription
       }
@@ -373,7 +373,7 @@ func processStillMatches(_ row: ProcessRow) -> Bool {
     && check.pbi_uid == row.uid
 }
 
-func processCSV(_ rows: [ProcessRow]) -> String {
+func processCSV(_ rows: [ProcessRow], includeHierarchy: Bool = false) -> String {
   let header =
     "Name,PID,User,CPU %,CPU seconds,Memory bytes,Threads,Bytes read,Bytes written,Network bytes received,Network bytes sent,GPU %,Observed GPU seconds\n"
   let lines: [String] = rows.map { p in
@@ -387,7 +387,9 @@ func processCSV(_ rows: [ProcessRow]) -> String {
     ]
     return cells.joined(separator: ",")
   }
-  return header + lines.joined(separator: "\n")
+  guard includeHierarchy else { return header + lines.joined(separator: "\n") }
+  let treeHeader = String(header.dropLast()) + ",Parent PID\n"
+  return treeHeader + zip(lines, rows).map { $0 + "," + String($1.parent) }.joined(separator: "\n")
 }
 
 var nativeKind: String {
