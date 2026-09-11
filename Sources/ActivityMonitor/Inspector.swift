@@ -163,24 +163,44 @@ struct ProcessIcon: View {
 @MainActor enum ProcessIconCache {
   static let images: NSCache<NSString, NSImage> = {
     let cache = NSCache<NSString, NSImage>()
-    cache.countLimit = 256
+    cache.countLimit = 128
+    cache.totalCostLimit = 8 * 1024 * 1024
     return cache
   }()
   static func retain(identities: [Int32: UInt64]) {
     processes = processes.filter { identities[$0.key] == $0.value.start }
+    trimIfNeeded()
   }
   static var retainedProcessCount: Int { processes.count }
   private struct Entry {
     let start: UInt64
     let image: NSImage?
+    var lastUsed: UInt64
   }
+  // Process identities are intentionally kept separate from the shared bundle cache so a
+  // recycled PID can never display an old icon. Keep the identity cache small as process
+  // tables can contain thousands of short-lived helpers over an app's lifetime.
+  private static let processLimit = 128
+  private static var accessCounter: UInt64 = 0
   private static var processes: [Int32: Entry] = [:]
   static func icon(pid: Int32, start: UInt64, isApp: Bool) -> NSImage? {
-    if let entry = processes[pid], entry.start == start { return entry.image }
+    accessCounter &+= 1
+    if var entry = processes[pid], entry.start == start {
+      entry.lastUsed = accessCounter
+      processes[pid] = entry
+      return entry.image
+    }
     let image = resolve(pid: pid, isApp: isApp)
-    if processes.count >= 4096 { processes.removeAll(keepingCapacity: true) }
-    processes[pid] = Entry(start: start, image: image)
+    processes[pid] = Entry(start: start, image: image, lastUsed: accessCounter)
+    trimIfNeeded()
     return image
+  }
+  private static func trimIfNeeded() {
+    guard processes.count > processLimit else { return }
+    let removeCount = max(1, processes.count - processLimit)
+    let victims = processes.sorted { $0.value.lastUsed < $1.value.lastUsed }
+      .prefix(removeCount).map(\.key)
+    for pid in victims { processes.removeValue(forKey: pid) }
   }
   /// Keep one small Retina representation, sufficient for the largest 48-point inspector icon.
   static func thumbnail(_ original: NSImage) -> NSImage {
@@ -211,7 +231,7 @@ struct ProcessIcon: View {
         let bundle = String(path[..<range.lowerBound]) + ".app"
         if let cached = images.object(forKey: bundle as NSString) { return cached }
         let image = thumbnail(NSWorkspace.shared.icon(forFile: bundle))
-        images.setObject(image, forKey: bundle as NSString)
+        images.setObject(image, forKey: bundle as NSString, cost: 128 * 128 * 4)
         return image
       }
     }

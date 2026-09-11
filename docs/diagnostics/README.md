@@ -23,6 +23,21 @@ Tables support column resizing, double-click fitting, drag reordering, sorting, 
 
 ## Memory visualizations
 
+The **Memory** page includes a fifteen-minute composition chart and a current/peak list
+for physical footprint, resident pages, private and shared resident pages, compressed
+bytes and purgeable bytes. Footprint is the primary process-memory comparison and comes
+from `proc_pid_rusage`; the other series are native diagnostic counters that can overlap
+or be unavailable when macOS denies task or region inspection. The chart keeps missing
+series as gaps and the list labels unavailable values with `—`.
+
+The **GPU** page includes a fifteen-minute chart of driver-reported device memory in use
+and allocated, followed by one row per visible GPU. Device totals describe the graphics
+driver’s view of the machine and are not the selected process’s allocation. Public macOS
+APIs do not provide a reliable per-process GPU allocation total, so the process row is
+explicitly labelled unavailable; the GPU activity chart above remains per-process where
+the driver publishes execution counters. Disconnected devices remain visible until the
+session is closed, with their counters cleared.
+
 **Memory map** offers two views: horizontal bars compare memory grouped by protection; **Address ranges** places the eight largest virtual mappings on a linear address axis. Each interval retains its true start, length and the gaps between mappings. Axis labels are offsets from the displayed base address. Small ranges may appear very thin beside large reservations; filter the table to inspect a smaller part of the address space.
 
 **Mapped images** ranks the eight largest images with an **Other** bar accounting for the remaining images. Multiple executable mappings of the same full path contribute to one bar, while the table retains each address separately. Hover or select a bar to see its full path and size. A focused chart supports Up/Down inspection and exposes values to accessibility tools.

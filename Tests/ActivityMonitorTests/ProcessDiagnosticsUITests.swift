@@ -69,7 +69,19 @@ import XCTest
       row.networkReceived = UInt64(index * 120000)
       row.networkSent = UInt64(index * 80000)
       row.gpuPercent = 25 + sin(Double(index) / 10) * 15
-      session.accept(rows: [row], date: end.addingTimeInterval(Double(index - 60)))
+      row.resident = row.memory / 2
+      row.details.privateMemory = row.memory / 3
+      row.details.sharedMemory = row.memory / 8
+      row.details.compressed = row.memory / 12
+      row.details.purgeable = row.memory / 20
+      session.accept(
+        rows: [row], date: end.addingTimeInterval(Double(index - 60)),
+        gpuDevices: [
+          GPUDeviceSample(
+            id: 1, name: "Preview GPU", unifiedMemory: true, utilization: 42, renderer: 35,
+            tiler: 18, memoryUsed: 700_000_000 + UInt64(index) * 100_000,
+            memoryAllocated: 900_000_000 + UInt64(index) * 100_000)
+        ])
     }
     return session
   }

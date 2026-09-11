@@ -124,6 +124,15 @@ final class ProcessDiagnosticsTests: XCTestCase {
     XCTAssertEqual(count, 1)
     XCTAssertEqual(truncated, 1)
   }
+  func testMemorySnapshotUsesNativeCountersWhenReadable() throws {
+    let row = try ownRow()
+    let snapshot = DiagnosticCollector.read(identity: ProcessIdentity(row), tab: .memory)
+    XCTAssertTrue(snapshot.valid)
+    let memory = try XCTUnwrap(snapshot.memory)
+    XCTAssertGreaterThan(memory.resident ?? 0, 0)
+    XCTAssertGreaterThan(memory.footprint ?? 0, 0)
+    XCTAssertTrue(snapshot.fields.contains { $0.name == "Compressed memory" } || memory.compressed == nil)
+  }
   func testRateResetsMissingDataAndCounterRollback() {
     XCTAssertEqual(ProcessActivitySample.rate(200, 100, elapsed: 2), 50)
     XCTAssertNil(ProcessActivitySample.rate(100, 200, elapsed: 2))
@@ -200,6 +209,37 @@ final class ProcessDiagnosticsTests: XCTestCase {
     childSession.accept(rows: [], date: start.addingTimeInterval(1))
     XCTAssertTrue(childSession.exited)
     XCTAssertEqual(childSession.histories.count, 1)
+  }
+  @MainActor func testSessionRecordsMemoryBreakdownAndDeviceGPUHistory() throws {
+    var row = try ownRow()
+    row.memory = 400
+    row.resident = 300
+    row.details.privateMemory = 200
+    row.details.sharedMemory = 100
+    row.details.compressed = 40
+    row.details.purgeable = 20
+    let session = ProcessDiagnosticSession(row: row)
+    let device = GPUDeviceSample(
+      id: 1, name: "Test GPU", unifiedMemory: true, memoryUsed: 700, memoryAllocated: 900)
+    let date = Date(timeIntervalSince1970: 1)
+    session.accept(rows: [row], date: date, gpuDevices: [device])
+    XCTAssertEqual(session.memoryHistory.last?.footprint, 400)
+    XCTAssertEqual(session.memoryHistory.last?.privateBytes, 200)
+    XCTAssertEqual(session.gpuMemoryHistory.last?.used, 700)
+    XCTAssertEqual(session.gpuMemoryHistory.last?.allocated, 900)
+    XCTAssertEqual(session.gpuMemoryDevices.map(\.id), [1])
+    XCTAssertNil(aggregateGPUBytes([UInt64.max, 1]))
+    XCTAssertNil(aggregateGPUBytes([nil, nil]))
+    XCTAssertNil(aggregateGPUBytes([700, nil]))
+    XCTAssertEqual(aggregateGPUBytes([700, 200]), 900)
+    for index in 1...1_200 {
+      session.accept(
+        rows: [row], date: date.addingTimeInterval(Double(index)), gpuDevices: [device])
+    }
+    XCTAssertEqual(session.memoryHistory.count, 901)
+    XCTAssertEqual(session.gpuMemoryHistory.count, 901)
+    XCTAssertGreaterThanOrEqual(
+      session.memoryHistory.first?.date ?? .distantPast, date.addingTimeInterval(300))
   }
   @MainActor func testSharedLeasesReleaseSessionWithoutRetainingMonitor() async throws {
     let row = try ownRow()
