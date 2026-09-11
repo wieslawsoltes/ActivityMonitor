@@ -327,11 +327,17 @@ struct ContentView: View {
             }
             .menuStyle(.borderlessButton).menuIndicator(.hidden).fixedSize().help("More")
           }.padding(.horizontal, layout.gutter)
-        }.frame(height: 44)
-        MetricSwitcher(
-          metric: Binding(get: { metric }, set: selectMetric), theme: theme, compact: layout.compact
-        )
-        .padding(.horizontal, layout.gutter).padding(.bottom, 4)
+          if layout.standard {
+            MetricSwitcher(metric: Binding(get: { metric }, set: selectMetric), theme: theme)
+          }
+        }.frame(height: layout.standard ? 78 : 44)
+        if !layout.standard {
+          MetricSwitcher(
+            metric: Binding(get: { metric }, set: selectMetric), theme: theme,
+            compact: layout.compact
+          )
+          .padding(.horizontal, layout.gutter).padding(.bottom, 4)
+        }
       }.background(theme.toolbar).overlay(alignment: .bottom) {
         Rectangle().fill(theme.border).frame(height: 1)
       }
