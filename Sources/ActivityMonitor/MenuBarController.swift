@@ -35,6 +35,7 @@ struct TrayLifecycle: View {
   private let popover = NSPopover()
   private let presentation = MenuBarPresentation()
   var hasPopoverContent: Bool { popover.contentViewController != nil }
+  private let outsideClicks = PopoverOutsideClickMonitor()
   private var subscriptions = Set<AnyCancellable>()
   init(monitor: Monitor, navigation: MonitorNavigation) {
     self.monitor = monitor
@@ -58,6 +59,7 @@ struct TrayLifecycle: View {
         .environmentObject(monitor).environmentObject(navigation))
   }
   func popoverDidClose(_ notification: Notification) {
+    outsideClicks.stop()
     popover.contentViewController = nil
   }
   func setEnabled(_ enabled: Bool) {
@@ -95,6 +97,53 @@ struct TrayLifecycle: View {
       popover.animates = !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
       popover.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
       popover.contentViewController?.view.window?.makeKey()
+      outsideClicks.start(
+        popoverWindow: popover.contentViewController?.view.window,
+        statusWindow: button.window
+      ) { [weak self] in self?.popover.performClose(nil) }
     }
+  }
+}
+
+/// Transient popovers shown from status items also need dismissal while the app is inactive.
+@MainActor final class PopoverOutsideClickMonitor {
+  private var local: Any?
+  private var global: Any?
+
+  static func isOutside(_ window: NSWindow?, popoverWindow: NSWindow?, statusWindow: NSWindow?) -> Bool {
+    guard let window else { return true }
+    if window === statusWindow { return false }
+    // Native menu windows belong to an interaction inside the popover.
+    if window.level >= .popUpMenu { return false }
+    var ancestor: NSWindow? = window
+    while let current = ancestor {
+      if current === popoverWindow { return false }
+      ancestor = current.parent
+    }
+    return true
+  }
+
+  func start(popoverWindow: NSWindow?, statusWindow: NSWindow?, close: @escaping () -> Void) {
+    stop()
+    let clicks: NSEvent.EventTypeMask = [.leftMouseDown, .rightMouseDown, .otherMouseDown]
+    local = NSEvent.addLocalMonitorForEvents(matching: clicks) { [weak popoverWindow, weak statusWindow] event in
+      if Self.isOutside(event.window, popoverWindow: popoverWindow, statusWindow: statusWindow) {
+        close()
+      }
+      return event
+    }
+    global = NSEvent.addGlobalMonitorForEvents(matching: clicks) { _ in close() }
+  }
+
+  func stop() {
+    if let local { NSEvent.removeMonitor(local) }
+    if let global { NSEvent.removeMonitor(global) }
+    local = nil
+    global = nil
+  }
+
+  deinit {
+    if let local { NSEvent.removeMonitor(local) }
+    if let global { NSEvent.removeMonitor(global) }
   }
 }

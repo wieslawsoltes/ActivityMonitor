@@ -46,21 +46,14 @@ struct MenuBarMonitor: View {
         }
         .buttonStyle(MonitorIconButton(theme: theme)).help(
           monitor.paused ? "Resume monitoring" : "Pause monitoring")
-        Menu {
-          Picker("Appearance", selection: $appearance) {
-            ForEach(["Light", "Dark", "System"], id: \.self) { Text($0).tag($0) }
-          }
-          Picker("Update interval", selection: $monitor.interval) {
-            Text("Every second").tag(1.0)
-            Text("Every 2 seconds").tag(2.0)
-            Text("Every 5 seconds").tag(5.0)
-          }
-          Divider()
-          Button("Quit Activity Monitor") { NSApp.terminate(nil) }
-        } label: {
-          Image(systemName: "ellipsis").frame(width: 28, height: 28)
-        }
-        .menuStyle(.borderlessButton).menuIndicator(.hidden).fixedSize().help("Monitor settings")
+        SettingsMenuButton(size: 28) {
+          let menu = NSMenu()
+          menu.addAppearance($appearance)
+          menu.addUpdateInterval($monitor.interval)
+          menu.addItem(.separator())
+          menu.addAction("Quit Activity Monitor") { NSApp.terminate(nil) }
+          return menu
+        }.frame(width: 28, height: 28)
       }.padding(16)
       MetricSwitcher(metric: $presentation.metric, theme: theme, compact: true).padding(
         .horizontal, 14)
