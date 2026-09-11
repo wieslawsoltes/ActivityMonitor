@@ -77,6 +77,29 @@ private struct UpdatingSettingsHarness: View {
     XCTAssertFalse(button.isBordered)
   }
 
+  func testOutsideClickClassificationPreservesPopoverAndMenus() {
+    _ = NSApplication.shared
+    let popover = testWindow()
+    let status = testWindow()
+    let other = testWindow()
+    let child = testWindow()
+    popover.addChildWindow(child, ordered: .above)
+    defer {
+      popover.removeChildWindow(child)
+      [popover, status, other, child].forEach { $0.close() }
+    }
+    func outside(_ target: NSWindow?) -> Bool {
+      PopoverOutsideClickMonitor.isOutside(target, popoverWindow: popover, statusWindow: status)
+    }
+    XCTAssertFalse(outside(popover))
+    XCTAssertFalse(outside(status))
+    XCTAssertFalse(outside(child))
+    XCTAssertTrue(outside(other))
+    XCTAssertTrue(outside(nil))
+    other.level = .popUpMenu
+    XCTAssertFalse(outside(other))
+  }
+
   private func findButton(in view: NSView) -> NSButton? {
     if let button = view as? NSButton { return button }
     return view.subviews.lazy.compactMap { self.findButton(in: $0) }.first
