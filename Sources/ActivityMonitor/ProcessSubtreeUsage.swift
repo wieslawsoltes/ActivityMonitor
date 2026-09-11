@@ -133,7 +133,7 @@ struct ProcessSubtreeUsage: Equatable {
     "Σ includes the process and all current descendants, even when hidden by search or collapse. ≥ marks a partial subtotal; — means no available counters. Parent and child totals overlap."
 
   /// Short enough to keep the column menu compact while retaining its accounting warning.
-  static let menuScopeHelp = "Σ includes descendants; ≥ means partial; totals overlap."
+  static let menuScopeHelp = "Σ descendants; ≥ partial; totals overlap."
 
   var description: String {
     "Subtree: \(processCount) \(processCount == 1 ? "process" : "processes"), including this process. "
