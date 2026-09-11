@@ -220,7 +220,7 @@ final class ProcessTreePresentation: ObservableObject {
       }
       return index + 1 < entries.count ? entries[index + 1].id : id
     }
-    if entry.hasChildren && entry.expanded {
+    if entry.hasChildren && (entry.expanded || recursive) {
       setExpanded(id, false, recursive: recursive)
       return id
     }
