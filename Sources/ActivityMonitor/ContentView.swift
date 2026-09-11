@@ -10,6 +10,8 @@ struct ContentView: View {
   @AppStorage("appearance") var appearance = "System"
   private static let machineName = Host.current().localizedName ?? "Mac"
   @StateObject var cpuPresentation = CPUChartPresentation()
+  @AppStorage("processViewMode.v1") var processViewMode = ProcessViewMode.list
+  @StateObject var processTree = ProcessTreePresentation()
   @State var metric: Metric = .cpu
   @State var range = 1
   @State var query = ""
@@ -32,8 +34,20 @@ struct ContentView: View {
   @State var hoverDate: Date?
   var selected: ProcessRow? { monitor.rows.first { $0.id == selection } }
   @State private var filtered: [ProcessRow] = []
+  private var visibleProcesses: [ProcessRow] {
+    processViewMode == .tree ? processTree.entries.map(\.row) : filtered
+  }
+  private var visibleUsage: [Int32: ProcessSubtreeUsage]? {
+    processViewMode == .tree ? processTree.snapshot.usageByID : nil
+  }
   private func refreshPresentation(_ rows: [ProcessRow]? = nil) {
-    filtered = processQuery.apply(rows ?? monitor.rows)
+    let source = rows ?? monitor.rows
+    filtered = processQuery.apply(source)
+    if processViewMode == .tree {
+      processTree.update(source, query: processQuery, matches: filtered)
+    } else {
+      processTree.retainIdentities(source)
+    }
   }
   private var processQuery: ProcessQuery {
     ProcessQuery(
@@ -136,6 +150,8 @@ struct ContentView: View {
           filter = "All processes"
           selection = pid
           inspector = true
+          refreshPresentation()
+          if processViewMode == .tree { processTree.reveal(pid) }
         }
       }
       .onReceive(monitor.$rows) { rows in
@@ -148,6 +164,16 @@ struct ContentView: View {
         }
       }
       .onChange(of: processQuery) { refreshPresentation() }
+      .onChange(of: processViewMode) {
+        refreshPresentation()
+        if processViewMode == .tree, let selection { processTree.reveal(selection) }
+      }
+      .focusedSceneValue(
+        \.processViewActions,
+        ProcessViewActions(
+          mode: $processViewMode, hasBranches: processTree.hasBranches,
+          expandAll: processTree.expandAll, collapseAll: processTree.collapseAll)
+      )
       .preferredColorScheme(appearance == "Dark" ? .dark : appearance == "Light" ? .light : nil)
       .alert(
         stopTargets.count == 1
@@ -235,6 +261,7 @@ struct ContentView: View {
       HStack(spacing: 16) {
         MonitorProcessTable(
           rows: filtered, metric: metric, theme: theme, query: $query, filter: $filter,
+          mode: $processViewMode, tree: processTree, sourceRows: monitor.rows,
           selection: $selection, selectedIDs: $selectedIDs, inspector: $inspector, sort: $sort,
           descending: $descending,
           inspect: { p in
@@ -272,9 +299,16 @@ struct ContentView: View {
             }
             .buttonStyle(MonitorIconButton(theme: theme)).help(monitor.paused ? "Resume" : "Pause")
             Menu {
-              Button("Export visible processes…") { monitor.export(filtered) }
-              Button("Export JSON snapshot…") { monitor.exportJSON(filtered) }
-              Button("Export GPU snapshot & history…") { monitor.exportGPU(filtered) }
+              Button("Export visible processes…") {
+                monitor.export(
+                  visibleProcesses, includeHierarchy: processViewMode == .tree, usage: visibleUsage)
+              }
+              Button("Export JSON snapshot…") {
+                monitor.exportJSON(visibleProcesses, usage: visibleUsage)
+              }
+              Button("Export GPU snapshot & history…") {
+                monitor.exportGPU(visibleProcesses, usage: visibleUsage)
+              }
               Divider()
               Picker("Appearance", selection: $appearance) {
                 ForEach(["Light", "Dark", "System"], id: \.self) { Text($0).tag($0) }
@@ -293,11 +327,17 @@ struct ContentView: View {
             }
             .menuStyle(.borderlessButton).menuIndicator(.hidden).fixedSize().help("More")
           }.padding(.horizontal, layout.gutter)
-        }.frame(height: 44)
-        MetricSwitcher(
-          metric: Binding(get: { metric }, set: selectMetric), theme: theme, compact: layout.compact
-        )
-        .padding(.horizontal, layout.gutter).padding(.bottom, 4)
+          if layout.standard {
+            MetricSwitcher(metric: Binding(get: { metric }, set: selectMetric), theme: theme)
+          }
+        }.frame(height: layout.standard ? 78 : 44)
+        if !layout.standard {
+          MetricSwitcher(
+            metric: Binding(get: { metric }, set: selectMetric), theme: theme,
+            compact: layout.compact
+          )
+          .padding(.horizontal, layout.gutter).padding(.bottom, 4)
+        }
       }.background(theme.toolbar).overlay(alignment: .bottom) {
         Rectangle().fill(theme.border).frame(height: 1)
       }
@@ -344,7 +384,8 @@ struct ContentView: View {
             Image(systemName: monitor.paused ? "play" : "pause")
           }.buttonStyle(MonitorIconButton(theme: theme)).help(monitor.paused ? "Resume" : "Pause")
           Button {
-            monitor.export(filtered)
+            monitor.export(
+              visibleProcesses, includeHierarchy: processViewMode == .tree, usage: visibleUsage)
           } label: {
             Image(systemName: "square.and.arrow.up")
           }.buttonStyle(MonitorIconButton(theme: theme)).help("Export visible processes")
@@ -361,8 +402,12 @@ struct ContentView: View {
           }.padding(3).overlay(RoundedRectangle(cornerRadius: 9).stroke(theme.border, lineWidth: 1))
           Menu {
             Toggle("Show monitor in menu bar", isOn: $showMenuBar)
-            Button("Export JSON snapshot…") { monitor.exportJSON(filtered) }
-            Button("Export GPU snapshot & history…") { monitor.exportGPU(filtered) }
+            Button("Export JSON snapshot…") {
+              monitor.exportJSON(visibleProcesses, usage: visibleUsage)
+            }
+            Button("Export GPU snapshot & history…") {
+              monitor.exportGPU(visibleProcesses, usage: visibleUsage)
+            }
             Divider()
             Picker("Update interval", selection: $monitor.interval) {
               Text("Every second").tag(1.0)

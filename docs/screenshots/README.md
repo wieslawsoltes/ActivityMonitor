@@ -55,3 +55,13 @@ Default CPU columns at a narrower window size, with the User column visible and 
 | Light | Dark |
 | :---: | :---: |
 | ![Automatically fitted CPU columns, light](v1.4.1/cpu-light.jpg) | ![Automatically fitted CPU columns, dark](v1.4.1/cpu-dark.jpg) |
+
+## List and Tree process views
+
+The same Google Chrome search in List and Tree, captured from the running PR 20 app on September 11, 2026. Tree retains ancestor context while keeping children beneath their parents.
+
+| List | Tree |
+| --- | --- |
+| ![Flat process list](process-tree/list-light.png) | ![Expanded process family with ancestor context](process-tree/tree-light.png) |
+
+[See dark and compact views](process-tree/README.md).

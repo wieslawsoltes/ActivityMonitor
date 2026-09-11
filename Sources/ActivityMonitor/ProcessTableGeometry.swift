@@ -21,14 +21,17 @@ enum ProcessTableGeometry {
 struct ProcessTableSelectionScroll: NSViewRepresentable {
   var selectedID: Int32?
   var rowIndex: Int?
+  var revealRevision = 0
   final class Anchor: NSView {
     override var isFlipped: Bool { true }
     var selectedID: Int32?
+    var revealRevision = -1
   }
   func makeNSView(context: Context) -> Anchor { Anchor() }
   func updateNSView(_ view: Anchor, context: Context) {
-    guard view.selectedID != selectedID else { return }
+    guard view.selectedID != selectedID || view.revealRevision != revealRevision else { return }
     view.selectedID = selectedID
+    view.revealRevision = revealRevision
     guard let rowIndex, let selectedID else { return }
     DispatchQueue.main.async { [weak view] in
       guard let view, view.selectedID == selectedID,
