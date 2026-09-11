@@ -389,7 +389,7 @@ struct MonitorProcessTable: View {
       descending = true
     }
     Text("— means the metric is unavailable.")
-    if hierarchy { Text(ProcessSubtreeUsage.scopeHelp) }
+    if hierarchy { Text(ProcessSubtreeUsage.menuScopeHelp) }
   }
   var compactToolbar: some View {
     VStack(spacing: 8) {
