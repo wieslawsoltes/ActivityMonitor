@@ -60,10 +60,18 @@ struct MonitorProcessTable: View {
   var preferences: ProcessColumnPreferences { ProcessColumnPreferences(columnVisibility) }
   var allColumns: [ProcessColumn] {
     let saved = preferences
-    return ProcessColumns.available(metric).filter {
+    let enabled = ProcessColumns.available(metric).filter {
       saved.isVisible(
         $0.id, metric: metric, showTime: showTime,
         showThreads: showThreads, showUser: showUser)
+    }
+    guard hierarchy else { return enabled }
+    return enabled.map { column in
+      ProcessColumn(
+        id: column.id,
+        title: ProcessUsageMetric.resolve(column.id, metric: metric) == nil
+          ? column.title : "Σ " + column.title,
+        weight: column.weight)
     }
   }
   var columns: [ProcessColumn] {
@@ -113,6 +121,7 @@ struct MonitorProcessTable: View {
               depth: entry.depth, hasChildren: entry.hasChildren,
               expanded: entry.expanded, isContext: entry.isContext,
               parentID: entry.parentID, parentName: entry.parentName,
+              usage: entry.usage,
               toggleExpanded: {
                 tree.toggle(row.id, recursive: NSEvent.modifierFlags.contains(.option))
               },
@@ -198,7 +207,9 @@ struct MonitorProcessTable: View {
             guard !selectedRows.isEmpty else { return [] }
             return [
               NSItemProvider(
-                object: processClipboard(selectedRows, keys: orderedKeys, metric: metric)
+                object: processClipboard(
+                  selectedRows, keys: orderedKeys, metric: metric,
+                  usage: hierarchy ? tree.snapshot.usageByID : nil)
                   as NSString)
             ]
           }
@@ -378,6 +389,7 @@ struct MonitorProcessTable: View {
       descending = true
     }
     Text("— means the metric is unavailable.")
+    if hierarchy { Text(ProcessSubtreeUsage.scopeHelp) }
   }
   var compactToolbar: some View {
     VStack(spacing: 8) {
@@ -538,24 +550,35 @@ struct MonitorProcessTable: View {
         sort == key ? theme.text : theme.secondary
       ).frame(maxWidth: .infinity, alignment: alignment).padding(.horizontal, 10)
         .frame(height: 36).contentShape(Rectangle())
-    }.buttonStyle(MonitorSegmentButton(theme: theme, radius: 0)).help(
-      unavailableColumn(key)
-        ? ProcessColumns.unavailableReason(key)!
-        : key == "gpuTime"
-          ? "Sort by GPU execution time observed during this session"
-          : key == "gpu" || (key == "primary" && metric == .gpu)
-            ? "Sort by GPU execution-time rate across all reporting devices; overlapping work can exceed 100%"
-            : key == "cpu" || (key == "primary" && (metric == .cpu || metric == .energy))
-              ? "Sort by CPU execution-time rate. " + CPUAccounting.processHelp
-              : "Sort by \(title)"
-    ).disabled(unavailableColumn(key))
+    }.buttonStyle(MonitorSegmentButton(theme: theme, radius: 0))
+      .help(headerHelp(title, key))
+      .accessibilityLabel(
+        hierarchy && ProcessUsageMetric.resolve(key, metric: metric) != nil
+          ? "Subtree " + title.replacingOccurrences(of: "Σ ", with: "") : title
+      )
+      .disabled(unavailableColumn(key))
+  }
+  func headerHelp(_ title: String, _ key: String) -> String {
+    if let reason = ProcessColumns.unavailableReason(key) { return reason }
+    if hierarchy, let counter = ProcessUsageMetric.resolve(key, metric: metric) {
+      return "Sort by subtree usage. " + counter.help + "\n" + ProcessSubtreeUsage.scopeHelp
+    }
+    switch ProcessColumns.canonical(key, metric: metric) {
+    case "gpuTime": return "Sort by GPU execution time observed during this session"
+    case "gpu":
+      return
+        "Sort by GPU execution-time rate across all reporting devices; overlapping work can exceed 100%"
+    case "cpu": return "Sort by CPU execution-time rate. " + CPUAccounting.processHelp
+    default: return "Sort by \(title)"
+    }
   }
   func unavailableColumn(_ key: String) -> Bool {
     ProcessColumns.unavailableReason(key) != nil
   }
   var processCountHelp: String {
     hierarchy
-      ? "\(rows.count) matching processes, \(tree.contextCount) ancestors for context, \(entries.count) visible rows. Values are per process."
+      ? "\(rows.count) matching processes, \(tree.contextCount) ancestors for context, \(entries.count) visible rows. "
+        + ProcessSubtreeUsage.scopeHelp
       : "\(rows.count) matching processes"
   }
   var processCountLabel: String {
@@ -577,7 +600,9 @@ struct MonitorProcessTable: View {
     if hierarchy && key == "name" {
       return ProcessTreeGeometry.fittedNameWidth(tree.snapshot.entries)
     }
-    return ProcessColumnLayout.fitted(key: key, title: title, metric: metric, rows: displayRows)
+    return ProcessColumnLayout.fitted(
+      key: key, title: title, metric: metric, rows: displayRows,
+      usage: hierarchy ? tree.snapshot.usageByID : nil)
   }
   func reconcileSelection() {
     let current = ProcessListSelection(
@@ -626,7 +651,9 @@ struct MonitorProcessTable: View {
     guard !values.isEmpty else { return }
     NSPasteboard.general.clearContents()
     NSPasteboard.general.setString(
-      processClipboard(values, keys: orderedKeys, metric: metric), forType: .string)
+      processClipboard(
+        values, keys: orderedKeys, metric: metric,
+        usage: hierarchy ? tree.snapshot.usageByID : nil), forType: .string)
   }
 
 }
@@ -646,6 +673,7 @@ private struct ProcessTableRow: View, Equatable {
   let isContext: Bool
   let parentID: Int32?
   let parentName: String?
+  let usage: ProcessSubtreeUsage?
   let toggleExpanded: () -> Void
   let expandBranch: () -> Void
   let collapseBranch: () -> Void
@@ -668,6 +696,7 @@ private struct ProcessTableRow: View, Equatable {
       && lhs.expanded == rhs.expanded && lhs.canStopSelection == rhs.canStopSelection
       && lhs.isContext == rhs.isContext && lhs.parentID == rhs.parentID
       && lhs.parentName == rhs.parentName
+      && lhs.usage == rhs.usage
   }
   private var indentation: CGFloat {
     hierarchical ? ProcessTreeGeometry.indentation(depth: depth, width: layout.name) : 0
@@ -735,7 +764,8 @@ private struct ProcessTableRow: View, Equatable {
         ProcessTableNameCell(
           pid: row.id, start: row.start, name: row.name, isApp: row.isApp,
           dark: theme.dark, hierarchical: hierarchical, hasChildren: hasChildren,
-          isContext: isContext, indentation: indentation, width: layout.name
+          isContext: isContext, subtreeCount: usage?.processCount ?? 1,
+          indentation: indentation, width: layout.name
         ).equatable().offset(x: layout.offset("name"))
       }.frame(height: 41).background(
         isSelected
@@ -757,9 +787,21 @@ private struct ProcessTableRow: View, Equatable {
       row.name, row.executableName.map { "Executable: " + $0 },
       hierarchical ? parentDescription : nil,
       isContext ? "Ancestor shown for context; does not match the current filter." : nil,
+      usageDescription,
       row.gpuAvailability,
     ]
     .compactMap { $0 }.joined(separator: "\n")
+  }
+  private var usageDescription: String? {
+    guard let usage else { return nil }
+    let values = columns.compactMap { column -> String? in
+      guard let counter = ProcessUsageMetric.resolve(column.id, metric: metric) else { return nil }
+      let title = column.title.replacingOccurrences(of: "Σ ", with: "")
+      return title + ": own " + ProcessValues.text(row, key: column.id, metric: metric)
+        + "; subtree " + ProcessValues.text(row, key: column.id, metric: metric, usage: usage)
+        + " (" + usage.coverage(counter) + ")"
+    }
+    return ([usage.description] + values).joined(separator: "\n")
   }
   private var parentDescription: String {
     if let parentID {
@@ -769,17 +811,24 @@ private struct ProcessTableRow: View, Equatable {
   }
   private var accessibleValues: String {
     let values = columns.map { column in
-      column.title + ": " + ProcessValues.text(row, key: column.id, metric: metric)
+      let value = ProcessValues.text(row, key: column.id, metric: metric, usage: usage)
+      if let usage, let counter = ProcessUsageMetric.resolve(column.id, metric: metric) {
+        return "Subtree " + column.title.replacingOccurrences(of: "Σ ", with: "") + ": "
+          + value + " (" + usage.coverage(counter) + ")"
+      }
+      return column.title + ": " + value
     }.joined(separator: ", ")
     guard hierarchical else { return values }
     return parentDescription + (hasChildren ? (expanded ? " Expanded. " : " Collapsed. ") : " ")
-      + (isContext ? "Ancestor context. " : "") + values
+      + (isContext ? "Ancestor context. " : "")
+      + (usage.map { "Subtree contains \($0.processCount) processes. " } ?? "") + values
   }
   private var metricCells: some View {
     Canvas { context, size in
       context.withCGContext { cg in
         ProcessMetricDrawing.draw(
-          row: row, columns: columns, layout: layout, metric: metric, theme: theme, in: cg)
+          row: row, columns: columns, layout: layout, metric: metric, theme: theme,
+          usage: usage, in: cg)
       }
     }.accessibilityHidden(true)
   }
@@ -798,6 +847,7 @@ private struct ProcessTableNameCell: View, Equatable {
   let hierarchical: Bool
   let hasChildren: Bool
   let isContext: Bool
+  let subtreeCount: Int
   let indentation: CGFloat
   let width: CGFloat
   var body: some View {
@@ -809,6 +859,12 @@ private struct ProcessTableNameCell: View, Equatable {
         .system(size: 12, weight: hierarchical && hasChildren ? .medium : .regular)
       ).foregroundStyle(isContext ? theme.secondary : theme.text).lineLimit(1)
         .truncationMode(.middle)
+      if subtreeCount > 1 && width > 240 {
+        Text("Σ \(subtreeCount)").font(.system(size: 9)).foregroundStyle(theme.secondary)
+          .fixedSize().padding(.horizontal, 5).padding(.vertical, 2)
+          .background(theme.subtle, in: RoundedRectangle(cornerRadius: 3))
+          .accessibilityLabel("Subtree contains \(subtreeCount) processes")
+      }
       if isContext && width > 280 {
         Text("Parent").font(.system(size: 9)).foregroundStyle(theme.secondary)
           .padding(.horizontal, 5).padding(.vertical, 2)

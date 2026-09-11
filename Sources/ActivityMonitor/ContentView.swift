@@ -37,6 +37,9 @@ struct ContentView: View {
   private var visibleProcesses: [ProcessRow] {
     processViewMode == .tree ? processTree.entries.map(\.row) : filtered
   }
+  private var visibleUsage: [Int32: ProcessSubtreeUsage]? {
+    processViewMode == .tree ? processTree.snapshot.usageByID : nil
+  }
   private func refreshPresentation(_ rows: [ProcessRow]? = nil) {
     let source = rows ?? monitor.rows
     filtered = processQuery.apply(source)
@@ -297,10 +300,15 @@ struct ContentView: View {
             .buttonStyle(MonitorIconButton(theme: theme)).help(monitor.paused ? "Resume" : "Pause")
             Menu {
               Button("Export visible processes…") {
-                monitor.export(visibleProcesses, includeHierarchy: processViewMode == .tree)
+                monitor.export(
+                  visibleProcesses, includeHierarchy: processViewMode == .tree, usage: visibleUsage)
               }
-              Button("Export JSON snapshot…") { monitor.exportJSON(visibleProcesses) }
-              Button("Export GPU snapshot & history…") { monitor.exportGPU(visibleProcesses) }
+              Button("Export JSON snapshot…") {
+                monitor.exportJSON(visibleProcesses, usage: visibleUsage)
+              }
+              Button("Export GPU snapshot & history…") {
+                monitor.exportGPU(visibleProcesses, usage: visibleUsage)
+              }
               Divider()
               Picker("Appearance", selection: $appearance) {
                 ForEach(["Light", "Dark", "System"], id: \.self) { Text($0).tag($0) }
@@ -370,7 +378,8 @@ struct ContentView: View {
             Image(systemName: monitor.paused ? "play" : "pause")
           }.buttonStyle(MonitorIconButton(theme: theme)).help(monitor.paused ? "Resume" : "Pause")
           Button {
-            monitor.export(visibleProcesses, includeHierarchy: processViewMode == .tree)
+            monitor.export(
+              visibleProcesses, includeHierarchy: processViewMode == .tree, usage: visibleUsage)
           } label: {
             Image(systemName: "square.and.arrow.up")
           }.buttonStyle(MonitorIconButton(theme: theme)).help("Export visible processes")
@@ -387,8 +396,12 @@ struct ContentView: View {
           }.padding(3).overlay(RoundedRectangle(cornerRadius: 9).stroke(theme.border, lineWidth: 1))
           Menu {
             Toggle("Show monitor in menu bar", isOn: $showMenuBar)
-            Button("Export JSON snapshot…") { monitor.exportJSON(visibleProcesses) }
-            Button("Export GPU snapshot & history…") { monitor.exportGPU(visibleProcesses) }
+            Button("Export JSON snapshot…") {
+              monitor.exportJSON(visibleProcesses, usage: visibleUsage)
+            }
+            Button("Export GPU snapshot & history…") {
+              monitor.exportGPU(visibleProcesses, usage: visibleUsage)
+            }
             Divider()
             Picker("Update interval", selection: $monitor.interval) {
               Text("Every second").tag(1.0)

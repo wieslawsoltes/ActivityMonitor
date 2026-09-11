@@ -172,4 +172,49 @@ import XCTest
     try save(host, name: "filtered-narrow-reordered")
     XCTAssertEqual(content.bounds.height, 37 + 3 * 41, accuracy: 2)
   }
+
+  func testCollapsedParentRepaintsWhenOnlyADescendantsCountersChange() async throws {
+    let suite = "ActivityMonitor.Tree.Usage.\(UUID())"
+    let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+    defer { defaults.removePersistentDomain(forName: suite) }
+    defaults.set("tree", forKey: "processViewMode.v1")
+    let tree = ProcessTreePresentation()
+    let monitor = PerformanceFixture.monitor()
+    monitor.rows = ProcessUsageFixture.rows
+    let originalParent = monitor.rows[0]
+    let host = NSHostingView(
+      rootView: ContentView(processTree: tree)
+        .environmentObject(monitor).environmentObject(MonitorNavigation()).defaultAppStorage(
+          defaults))
+    let window = NSWindow(
+      contentRect: .init(x: 0, y: 0, width: 1440, height: 900),
+      styleMask: [.borderless], backing: .buffered, defer: false)
+    window.isReleasedWhenClosed = false
+    window.contentView = host
+    defer {
+      window.contentView = nil
+      window.close()
+    }
+    host.frame = window.contentView!.bounds
+    try await settle(host)
+    tree.setExpanded(10, false)
+    try await settle(host)
+    func image() throws -> Data {
+      let table = try document(host)
+      let bitmap = try XCTUnwrap(table.bitmapImageRepForCachingDisplay(in: table.bounds))
+      table.cacheDisplay(in: table.bounds, to: bitmap)
+      return try XCTUnwrap(bitmap.representation(using: .png, properties: [:]))
+    }
+    XCTAssertEqual(tree.entries.map(\.id), [10, 60])
+    XCTAssertEqual(tree.entries[0].usage?[.cpu].value, .number(112.75))
+    let before = try image()
+    monitor.rows[1].cpu += 100
+    try await settle(host)
+    XCTAssertEqual(tree.entries.map(\.id), [10, 60])
+    XCTAssertEqual(tree.entries[0].row, originalParent)
+    XCTAssertEqual(tree.entries[0].usage?[.cpu].value, .number(212.75))
+    XCTAssertNotEqual(
+      try image(), before, "A hidden child's CPU change must repaint its parent's total")
+    try save(host, name: "subtree-total-child-refresh")
+  }
 }

@@ -19,7 +19,10 @@ struct ProcessViewModePicker: View {
           .accessibilityLabel("\(item.title) view")
           .accessibilityIdentifier("process-view-\(item.rawValue)")
           .accessibilityAddTraits(mode == item ? .isSelected : [])
-          .help("Show processes as a \(item.rawValue) · ⌘⇧T")
+          .help(
+            item == .tree
+              ? "Show processes as a tree with subtree usage totals · ⌘⇧T"
+              : "Show processes as a list with individual usage · ⌘⇧T")
       }
     }.padding(3).background(theme.recessed, in: RoundedRectangle(cornerRadius: 8))
       .overlay(RoundedRectangle(cornerRadius: 8).stroke(theme.border, lineWidth: 1))
