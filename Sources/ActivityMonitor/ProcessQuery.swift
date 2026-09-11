@@ -27,11 +27,15 @@ struct ProcessQuery: Equatable {
     default: return true
     }
   }
+  // Use Foundation’s native string search to avoid repeatedly bridging the current
+  // locale through Swift’s locale cache for every field in a process snapshot.
   func matches(_ p: ProcessRow) -> Bool {
     matchesFilter(p)
-      && (query.isEmpty || p.name.localizedCaseInsensitiveContains(query)
-        || (p.executableName?.localizedCaseInsensitiveContains(query) ?? false)
-        || p.user.localizedCaseInsensitiveContains(query) || String(p.id).contains(query))
+      && (query.isEmpty || (p.name as NSString).localizedCaseInsensitiveContains(query)
+        || (p.executableName.map { ($0 as NSString).localizedCaseInsensitiveContains(query) }
+          ?? false)
+        || (p.user as NSString).localizedCaseInsensitiveContains(query)
+        || String(p.id).contains(query))
   }
 
   func apply(
