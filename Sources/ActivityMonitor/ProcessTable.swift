@@ -43,12 +43,15 @@ struct MonitorProcessTable: View {
       ? tree.entries
       : rows.map { ProcessTreeEntry(row: $0, depth: 0, hasChildren: false) }
   }
-  var displayRows: [ProcessRow] { entries.map(\.row) }
+  var displayRows: [ProcessRow] { hierarchy ? tree.entries.map(\.row) : rows }
   var orderPreferences: ProcessColumnOrder { ProcessColumnOrder(columnOrder) }
   var orderedKeys: [String] {
     orderPreferences.ordered(["name"] + columns.map(\.id), metric: metric)
   }
-  var selectedRows: [ProcessRow] { displayRows.filter { selectedIDs.contains($0.id) } }
+  var selectedRows: [ProcessRow] {
+    guard !selectedIDs.isEmpty else { return [] }
+    return displayRows.filter { selectedIDs.contains($0.id) }
+  }
   var widthPreferences: ProcessColumnWidths {
     var value = ProcessColumnWidths(columnWidths)
     for (key, width) in draftWidths { value.set(key, metric: metric, width: width) }
@@ -222,7 +225,9 @@ struct MonitorProcessTable: View {
             }
             rememberSelection()
           }
-          .onChange(of: visibleEntries.map(\.identity)) { reconcileSelection() }
+          .onChange(of: selectedIDs.isEmpty ? [] : visibleEntries.map(\.identity)) {
+            reconcileSelection()
+          }
           .onChange(of: g.size.width) { availableWidth = g.size.width }
           .onChange(of: metric) { draftWidths = [:] }
       }.background(theme.card).clipShape(
@@ -668,92 +673,84 @@ private struct ProcessTableRow: View, Equatable {
     hierarchical ? ProcessTreeGeometry.indentation(depth: depth, width: layout.name) : 0
   }
   var body: some View {
-    ZStack(alignment: .leading) {
-      Button {
-        select()
-      } label: {
+    Group {
+      if hierarchical {
         ZStack(alignment: .leading) {
-          metricCells.frame(width: layout.total, height: 41)
-          HStack(spacing: 10) {
-            if hierarchical {
-              Color.clear.frame(width: 12, height: 30)
+          rowButton.accessibilityActions {
+            if hasChildren {
+              Button(expanded ? "Collapse branch" : "Expand branch", action: toggleExpanded)
             }
-            ProcessIcon(pid: row.id, isApp: row.isApp, start: row.start).frame(
-              width: 24, height: 24)
-            Text(row.name).font(
-              .system(size: 12, weight: hierarchical && hasChildren ? .medium : .regular)
-            )
-            .foregroundStyle(isContext ? theme.secondary : theme.text).lineLimit(1)
-            .truncationMode(.middle)
-            if isContext && layout.name > 280 {
-              Text("Parent").font(.system(size: 9)).foregroundStyle(theme.secondary)
-                .padding(.horizontal, 5).padding(.vertical, 2)
-                .background(theme.subtle, in: RoundedRectangle(cornerRadius: 3))
-            }
-          }.padding(.leading, 17 + indentation).padding(
-            .trailing, 17
-          ).frame(width: layout.name, alignment: .leading)
-            .clipped()
-            .offset(x: layout.offset("name"))
-        }.frame(height: 41).background(
-          isSelected
-            ? theme.selected
-            : hovered ? theme.hover : index % 2 == 1 ? theme.stripe : Color.clear
-        ).overlay(alignment: .leading) {
-          if isSelected { Rectangle().fill(theme.blue).frame(width: 2) }
-        }.overlay(alignment: .bottom) { Rectangle().fill(theme.separator).frame(height: 1) }
-          .contentShape(Rectangle())
-      }.buttonStyle(.plain).focusEffectDisabled().help(rowHelp)
-        .simultaneousGesture(TapGesture(count: 2).onEnded { inspect(row) })
-        .accessibilityAddTraits(isSelected ? .isSelected : []).accessibilityLabel(
-          "\(row.name), PID \(row.id)"
-        ).accessibilityValue(accessibleValues)
-        .accessibilityAction(named: "Inspect") { inspect(row) }
-        .accessibilityActions {
-          if hierarchical && hasChildren {
-            Button(expanded ? "Collapse branch" : "Expand branch", action: toggleExpanded)
+            if parentID != nil { Button("Select parent", action: selectParent) }
           }
-          if hierarchical && parentID != nil { Button("Select parent", action: selectParent) }
-        }
-      if hierarchical && hasChildren {
-        Button(action: toggleExpanded) {
-          Image(systemName: expanded ? "chevron.down" : "chevron.right")
-            .font(.system(size: 9, weight: .semibold)).foregroundStyle(theme.secondary)
-            .frame(width: 20, height: 29).contentShape(Rectangle())
-        }.buttonStyle(MonitorSegmentButton(theme: theme, radius: 4))
-          .offset(x: layout.offset("name") + 13 + indentation)
-          .accessibilityLabel("\(expanded ? "Collapse" : "Expand") \(row.name)")
-          .accessibilityIdentifier("process-disclosure-\(row.id)")
-          .help(
-            "\(expanded ? "Collapse" : "Expand") branch. Option-click includes all descendants.")
+          if hasChildren {
+            Button(action: toggleExpanded) {
+              Image(systemName: expanded ? "chevron.down" : "chevron.right")
+                .font(.system(size: 9, weight: .semibold)).foregroundStyle(theme.secondary)
+                .frame(width: 20, height: 29).contentShape(Rectangle())
+            }.buttonStyle(MonitorSegmentButton(theme: theme, radius: 4))
+              .offset(x: layout.offset("name") + 13 + indentation)
+              .accessibilityLabel("\(expanded ? "Collapse" : "Expand") \(row.name)")
+              .accessibilityIdentifier("process-disclosure-\(row.id)")
+              .help(
+                "\(expanded ? "Collapse" : "Expand") branch. Option-click includes all descendants."
+              )
+          }
+        }.frame(width: layout.total, height: 41).accessibilityElement(children: .contain)
+      } else {
+        rowButton
       }
-    }.frame(width: layout.total, height: 41)
-      .onHover { hovered = $0 }
-      .accessibilityElement(children: .contain)
-      .contextMenu {
-        Button("Inspect") { inspect(row) }
-        if let diagnose {
-          Button("Process diagnostics…") { diagnose(row, false) }
-          Button("Open in tool window") { diagnose(row, true) }
-        }
-        if hierarchical {
-          Divider()
-          Button("Expand subtree", action: expandBranch).disabled(!hasChildren)
-          Button("Collapse subtree", action: collapseBranch).disabled(!hasChildren)
-          Button("Select parent", action: selectParent).disabled(parentID == nil)
-          Divider()
-        }
-        Button("Copy selected rows", action: copy)
-        Button("Quit selected processes…", role: .destructive, action: stopSelection).disabled(
-          !canStopSelection)
+    }
+    .onHover { hovered = $0 }
+    .contextMenu {
+      Button("Inspect") { inspect(row) }
+      if let diagnose {
+        Button("Process diagnostics…") { diagnose(row, false) }
+        Button("Open in tool window") { diagnose(row, true) }
+      }
+      if hierarchical {
         Divider()
-        Button("Copy PID") {
-          NSPasteboard.general.clearContents()
-          NSPasteboard.general.setString(String(row.id), forType: .string)
-        }
-        Button("Quit…", role: .destructive) { stop(row) }.disabled(
-          row.uid != getuid() || row.id <= 1 || row.id == getpid())
+        Button("Expand subtree", action: expandBranch).disabled(!hasChildren)
+        Button("Collapse subtree", action: collapseBranch).disabled(!hasChildren)
+        Button("Select parent", action: selectParent).disabled(parentID == nil)
+        Divider()
       }
+      Button("Copy selected rows", action: copy)
+      Button("Quit selected processes…", role: .destructive, action: stopSelection).disabled(
+        !canStopSelection)
+      Divider()
+      Button("Copy PID") {
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(String(row.id), forType: .string)
+      }
+      Button("Quit…", role: .destructive) { stop(row) }.disabled(
+        row.uid != getuid() || row.id <= 1 || row.id == getpid())
+    }
+  }
+  private var rowButton: some View {
+    Button {
+      select()
+    } label: {
+      ZStack(alignment: .leading) {
+        metricCells.frame(width: layout.total, height: 41)
+        ProcessTableNameCell(
+          pid: row.id, start: row.start, name: row.name, isApp: row.isApp,
+          dark: theme.dark, hierarchical: hierarchical, hasChildren: hasChildren,
+          isContext: isContext, indentation: indentation, width: layout.name
+        ).equatable().offset(x: layout.offset("name"))
+      }.frame(height: 41).background(
+        isSelected
+          ? theme.selected
+          : hovered ? theme.hover : index % 2 == 1 ? theme.stripe : Color.clear
+      ).overlay(alignment: .leading) {
+        if isSelected { Rectangle().fill(theme.blue).frame(width: 2) }
+      }.overlay(alignment: .bottom) { Rectangle().fill(theme.separator).frame(height: 1) }
+        .contentShape(Rectangle())
+    }.buttonStyle(.plain).focusEffectDisabled().help(rowHelp)
+      .simultaneousGesture(TapGesture(count: 2).onEnded { inspect(row) })
+      .accessibilityAddTraits(isSelected ? .isSelected : []).accessibilityLabel(
+        "\(row.name), PID \(row.id)"
+      ).accessibilityValue(accessibleValues)
+      .accessibilityAction(named: "Inspect") { inspect(row) }
   }
   private var rowHelp: String {
     [
@@ -788,6 +785,37 @@ private struct ProcessTableRow: View, Equatable {
   }
   func text(_ p: ProcessRow, _ key: String) -> String {
     ProcessValues.text(p, key: key, metric: metric)
+  }
+}
+
+/// Telemetry changes do not invalidate the process icon, name or ancestry label.
+private struct ProcessTableNameCell: View, Equatable {
+  let pid: Int32
+  let start: UInt64
+  let name: String
+  let isApp: Bool
+  let dark: Bool
+  let hierarchical: Bool
+  let hasChildren: Bool
+  let isContext: Bool
+  let indentation: CGFloat
+  let width: CGFloat
+  var body: some View {
+    let theme = MonitorTheme(dark: dark)
+    HStack(spacing: 10) {
+      if hierarchical { Color.clear.frame(width: 12, height: 30) }
+      ProcessIcon(pid: pid, isApp: isApp, start: start).frame(width: 24, height: 24)
+      Text(name).font(
+        .system(size: 12, weight: hierarchical && hasChildren ? .medium : .regular)
+      ).foregroundStyle(isContext ? theme.secondary : theme.text).lineLimit(1)
+        .truncationMode(.middle)
+      if isContext && width > 280 {
+        Text("Parent").font(.system(size: 9)).foregroundStyle(theme.secondary)
+          .padding(.horizontal, 5).padding(.vertical, 2)
+          .background(theme.subtle, in: RoundedRectangle(cornerRadius: 3))
+      }
+    }.padding(.leading, 17 + indentation).padding(.trailing, 17)
+      .frame(width: width, alignment: .leading).clipped()
   }
 }
 

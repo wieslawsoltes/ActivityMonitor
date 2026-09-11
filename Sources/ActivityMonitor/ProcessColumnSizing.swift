@@ -37,6 +37,12 @@ struct ProcessColumnWidths {
 }
 
 struct ProcessColumnLayout: Equatable {
+  private struct HeaderKey: Hashable {
+    let id: String
+    let title: String
+    let metric: Metric
+  }
+  private static let preferredWidths = BoundedCache<HeaderKey, CGFloat>(capacity: 256)
   let name: CGFloat
   let widths: [String: CGFloat]
   let total: CGFloat
@@ -102,6 +108,12 @@ struct ProcessColumnLayout: Equatable {
   func offset(_ key: String) -> CGFloat { order.prefix { $0 != key }.reduce(0) { $0 + width($1) } }
 
   static func preferred(_ column: ProcessColumn, metric: Metric) -> CGFloat {
+    preferredWidths.value(for: HeaderKey(id: column.id, title: column.title, metric: metric)) {
+      measurePreferred(column, metric: metric)
+    }
+  }
+
+  private static func measurePreferred(_ column: ProcessColumn, metric: Metric) -> CGFloat {
     let key = ProcessColumns.canonical(column.id, metric: metric)
     let base: CGFloat
     switch key {
