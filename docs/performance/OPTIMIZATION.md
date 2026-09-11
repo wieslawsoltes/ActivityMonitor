@@ -25,6 +25,8 @@ Fixtures use 1,000 processes, 901 chronological history samples, and a populated
 | --- | ---: |
 | Each 15-minute chart, creation plus offscreen raster | 25 ms median |
 | Filter/sort 1,000 processes in all six views | 5 ms median |
+| Build full and filtered process trees for 1,000 processes in all six views | 40 ms median |
+| Tree workspace, creation plus offscreen raster | 800 ms median |
 | Format every available column for 1,000 processes | 75 ms median |
 | Main workspace, creation plus offscreen raster | 800 ms median |
 | Gallery / inspector / popover raster | 350 / 150 / 350 ms median |
@@ -32,6 +34,8 @@ Fixtures use 1,000 processes, 901 chronological history samples, and a populated
 | One-row scroll and layout | 20 ms median, 50 ms p95 |
 | Refresh 1,000 rows and layout | 30 ms median, 50 ms p95 |
 | Physical-footprint growth during the warmed scroll/refresh cycle | 64 MiB maximum |
+
+The tree construction gate includes twelve complete operations: one unfiltered and one filtered forest for each of six views. Initial release measurements were about 22 ms for the full batch; the 40 ms ceiling provides runner headroom. The tree workspace uses the same 800 ms budget as the flat workspace. Existing list and chart budgets are unchanged.
 
 Intel timing ceilings use the explicit factor of two in the budget file. This is conservative runner headroom, not a claim that Intel is twice as slow. Memory uses the same bound on both architectures. Budget changes need a measured explanation in the PR; never automatically increase them to make a failure pass.
 
