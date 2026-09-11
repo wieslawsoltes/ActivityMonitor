@@ -1,4 +1,4 @@
-Activity Monitor 1.6.2 adds a Process Explorer-style process tree and keeps settings menus stable during live telemetry updates.
+Activity Monitor 1.6.3 refines process-tree menus and status-item popover interactions.
 
 ### New
 
@@ -8,6 +8,8 @@ Activity Monitor 1.6.2 adds a Process Explorer-style process tree and keeps sett
 
 ### Improved
 
+- Process-tree usage guidance stays compact in narrow column menus while retaining the accounting caveat.
+- Status-item popovers close when clicking outside the popover, including when the app is inactive, while native menus and popover child windows continue to work normally.
 - The process tree is built and filtered efficiently during telemetry refreshes, with performance coverage for large process sets.
 - Settings menus remain open while live telemetry updates, so changing an interval or display option does not dismiss the menu.
 - Threads, open files, connections, memory maps, mapped images, Mach ports and fileports show a focused set of columns by default.
@@ -22,4 +24,4 @@ Download the universal DMG or app ZIP for Apple silicon and Intel on macOS 14 or
 
 [Process diagnostics guide](https://github.com/wieslawsoltes/ActivityMonitor/blob/main/docs/diagnostics/README.md) · [Installation guide](https://github.com/wieslawsoltes/ActivityMonitor#installation)
 
-[Changes since 1.6.1](https://github.com/wieslawsoltes/ActivityMonitor/compare/v1.6.1...v1.6.2)
+[Changes since 1.6.2](https://github.com/wieslawsoltes/ActivityMonitor/compare/v1.6.2...v1.6.3)
