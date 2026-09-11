@@ -38,6 +38,10 @@ struct ProcessTreeSnapshot {
   ) {
     // Snapshot races must not create duplicate row identities.
     var rows: [ProcessRow] = []
+    rows.reserveCapacity(sortedRows.count)
+    rowsByID.reserveCapacity(sortedRows.count)
+    parents.reserveCapacity(sortedRows.count)
+    usageByID.reserveCapacity(sortedRows.count)
     for row in sortedRows where rowsByID[row.id] == nil {
       rowsByID[row.id] = row
       rows.append(row)
@@ -54,9 +58,12 @@ struct ProcessTreeSnapshot {
     // Break each cycle at its smallest PID, independent of the selected sort.
     // Each edge is visited once, even for a very deep process chain.
     var checked = Set<Int32>()
+    checked.reserveCapacity(rows.count)
+    var path: [Int32] = []
+    var positions: [Int32: Int] = [:]
+    positions.reserveCapacity(rows.count)
     for row in rows where !checked.contains(row.id) {
-      var path: [Int32] = []
-      var positions: [Int32: Int] = [:]
+      path.removeAll(keepingCapacity: true)
       var cursor: Int32? = row.id
       while let id = cursor, !checked.contains(id) {
         if let cycle = positions[id] {
@@ -73,6 +80,7 @@ struct ProcessTreeSnapshot {
     // Reduce leaves into their direct parent exactly once. The complete forest
     // is accounted before either filtering or collapse hides any descendants.
     var remainingChildren: [Int32: Int] = [:]
+    remainingChildren.reserveCapacity(rows.count)
     for row in rows {
       usageByID[row.id] = ProcessSubtreeUsage(row)
       if let parent = parents[row.id] { remainingChildren[parent, default: 0] += 1 }
@@ -86,15 +94,17 @@ struct ProcessTreeSnapshot {
     }
 
     var included = Set<Int32>()
+    included.reserveCapacity(rows.count)
     for id in self.matchingIDs where rowsByID[id] != nil {
       var cursor: Int32? = id
       while let next = cursor, included.insert(next).inserted { cursor = parents[next] }
     }
-    let orderedRows = ordering?.apply(rows, usage: usageByID) ?? rows
-    let includedRows = orderedRows.filter { included.contains($0.id) }
+    let includedRows = rows.filter { included.contains($0.id) }
+    let orderedRows = ordering?.apply(includedRows, usage: usageByID) ?? includedRows
+    entries.reserveCapacity(includedRows.count)
     var children: [Int32: [ProcessRow]] = [:]
     var roots: [ProcessRow] = []
-    for row in includedRows {
+    for row in orderedRows {
       if let parent = parents[row.id] {
         children[parent, default: []].append(row)
       } else {

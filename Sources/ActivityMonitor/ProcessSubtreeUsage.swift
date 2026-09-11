@@ -6,6 +6,31 @@ enum ProcessUsageMetric: String, CaseIterable {
   case received, sent, packetsIn, packetsOut, ports
   case privateMemory, sharedMemory, purgeable, compressed, wakeups
 
+  /// Stable dense offsets keep counter access free of hashing in the aggregation pass.
+  var index: Int {
+    switch self {
+    case .cpu: return 0
+    case .time: return 1
+    case .gpu: return 2
+    case .gpuTime: return 3
+    case .threads: return 4
+    case .memory: return 5
+    case .resident: return 6
+    case .read: return 7
+    case .written: return 8
+    case .received: return 9
+    case .sent: return 10
+    case .packetsIn: return 11
+    case .packetsOut: return 12
+    case .ports: return 13
+    case .privateMemory: return 14
+    case .sharedMemory: return 15
+    case .purgeable: return 16
+    case .compressed: return 17
+    case .wakeups: return 18
+    }
+  }
+
   static func resolve(_ key: String, metric: Metric) -> Self? {
     Self(rawValue: ProcessColumns.canonical(key, metric: metric))
   }
@@ -90,16 +115,13 @@ struct ProcessSubtreeUsage: Equatable {
   init(_ row: ProcessRow) {
     residentFallbackCount = row.accessible && row.memoryUsesResidentFallback == true ? 1 : 0
     totals = ProcessUsageMetric.allCases.map {
-      ProcessUsageTotal(ProcessValues.value(row, key: $0.rawValue, metric: .cpu))
+      ProcessUsageTotal(ProcessValues.value(row, counter: $0))
     }
   }
 
   subscript(_ metric: ProcessUsageMetric) -> ProcessUsageTotal {
-    totals[Self.indices[metric]!]
+    totals[metric.index]
   }
-
-  private static let indices = Dictionary(
-    uniqueKeysWithValues: ProcessUsageMetric.allCases.enumerated().map { ($0.element, $0.offset) })
 
   mutating func add(_ other: Self) {
     processCount += other.processCount
