@@ -31,7 +31,8 @@ Keep an eye on performance, understand resource usage, and find the processes th
 ## Find the detail that matters
 
 - **Find a process quickly.** Find apps by their macOS display names—including virtual machine names—or search by executable, PID or user. Choose from 28 column types in every view, with choices saved per view. Additional columns stay hidden until you enable them.
-- **Personal layouts.** Default columns fit the available width without unnecessary horizontal scrolling. Resize header dividers, double-click to fit contents, and drag columns into your preferred order. Each view remembers its widths, order and visible columns. Select ranges or multiple processes, copy rows, and explore parent/child process trees.
+- **Personal layouts.** Default columns fit the available width without unnecessary horizontal scrolling. Resize header dividers, double-click to fit contents, and drag columns into your preferred order. Each view remembers its widths, order and visible columns. Select ranges or multiple processes and copy rows.
+- **Follow process families.** Switch between List and Tree in every view. Expand a process to follow its children, sort within each branch, and search while keeping parent context. Your display choice is remembered, and branches stay open or closed as you resize or change views. [Explore process trees](docs/process-tree.md).
 - **Look closer.** Open a process workspace with activity histories, threads, files, connections, ports, memory maps and diagnostic reports. Detach it into a floating tool window or pin the process to the menu bar.
 - **Take action.** Quit or force quit your processes, with confirmation before termination.
 - **See every processor.** Switch from one CPU chart to individual logical processors. Inspect each history, filter performance or efficiency cores when identified, or explore individual threads in a process workspace and its menu-bar pin.
@@ -120,15 +121,18 @@ To uninstall, quit the app and move it from Applications to the Trash. See [inst
 | :--- | :--- |
 | **⌘1–⌘6** | Switch views |
 | **⌘K** | Search processes |
+| **⌘⇧T** | Switch between List and Tree |
 | **Space** | Pause or resume |
 | **↑ / ↓** | Select a process when the list is focused |
+| **← / → in Tree** | Collapse or select parent / expand or select first child |
+| **Option-click a disclosure** | Expand or collapse the entire subtree |
 | **Return / Escape** | Open or close the inspector when the list is focused |
 | **⌘⇧E** | Export all processes as CSV |
 | **⌘⇧M** | Open the menu-bar monitor |
 | **⌘⌥1 / ⌘⌥2 / ⌘⌥3** | Compact / minimum / default window size |
 | **← / →** | Inspect samples when a chart is focused |
 
-The toolbar export button saves the current filtered and sorted list.
+The toolbar export button saves the visible processes in their displayed order, including ancestor context in Tree mode. Collapsed descendants are omitted.
 
 ## Your data stays on your Mac
 
