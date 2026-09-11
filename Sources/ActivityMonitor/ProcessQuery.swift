@@ -19,15 +19,24 @@ struct ProcessQuery: Equatable {
     case "My processes": return p.uid == getuid()
     case "System processes": return p.uid == 0
     case "Other users’ processes": return p.uid != getuid()
-    case "Active processes": return p.accessible && p.cpu > 0
-    case "Inactive processes": return p.accessible && p.cpu == 0
+    case "Active processes": return p.accessible && p.cpuSampleAvailable != false && p.cpu > 0
+    case "Inactive processes": return p.accessible && p.cpuSampleAvailable != false && p.cpu == 0
     case "GPU processes": return (p.gpuPercent ?? 0) > 0
     case "Windowed processes", "Applications": return p.isApp
     case "Selected processes": return selected.contains(p.id)
     default: return true
     }
   }
-  func apply(_ rows: [ProcessRow], limit: Int? = nil) -> [ProcessRow] {
+  func matches(_ p: ProcessRow) -> Bool {
+    matchesFilter(p)
+      && (query.isEmpty || p.name.localizedCaseInsensitiveContains(query)
+        || (p.executableName?.localizedCaseInsensitiveContains(query) ?? false)
+        || p.user.localizedCaseInsensitiveContains(query) || String(p.id).contains(query))
+  }
+
+  func apply(
+    _ rows: [ProcessRow], limit: Int? = nil, usage: [Int32: ProcessSubtreeUsage]? = nil
+  ) -> [ProcessRow] {
     struct Candidate {
       let index: Int
       let pid: Int32
@@ -49,14 +58,10 @@ struct ProcessQuery: Equatable {
     var candidates: [Candidate] = []
     candidates.reserveCapacity(limit.map { min(rows.count, max(0, $0)) } ?? rows.count)
     for (index, p) in rows.enumerated() {
-      guard matchesFilter(p),
-        query.isEmpty || p.name.localizedCaseInsensitiveContains(query)
-          || (p.executableName?.localizedCaseInsensitiveContains(query) ?? false)
-          || p.user.localizedCaseInsensitiveContains(query) || String(p.id).contains(query)
-      else { continue }
+      guard matches(p) else { continue }
       let candidate = Candidate(
         index: index, pid: p.id,
-        value: ProcessValues.value(p, key: key, metric: metric))
+        value: ProcessValues.value(p, key: key, metric: metric, usage: usage?[p.id]))
       if let limit {
         guard limit > 0 else { return [] }
         if candidates.count == limit, let last = candidates.last, !before(candidate, last) {

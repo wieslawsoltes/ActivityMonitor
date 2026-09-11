@@ -137,8 +137,10 @@ final class PerformanceCorrectnessTests: XCTestCase {
     XCTAssertTrue(rows.contains(999))
     XCTAssertEqual(end.x, 73)
   }
-  func testByteFormatterMatchesFoundationAcrossBoundariesAndThreads() {
-    let values: [UInt64] = [0, 1, 1023, 1024, 1_048_575, 1_048_576, 1_073_741_823, UInt64.max]
+  func testByteFormatterPreservesSignedAndUnsignedRangesAcrossThreads() {
+    let values: [UInt64] = [
+      0, 1, 1023, 1024, 1_048_575, 1_048_576, 1_073_741_823, UInt64(Int64.max),
+    ]
     DispatchQueue.concurrentPerform(iterations: 16) { _ in
       for value in values {
         XCTAssertEqual(
@@ -146,6 +148,8 @@ final class PerformanceCorrectnessTests: XCTestCase {
           ByteCountFormatter.string(
             fromByteCount: Int64(clamping: value), countStyle: .memory))
       }
+      XCTAssertEqual(bytes(1 << 63), "8.0 EiB")
+      XCTAssertEqual(bytes(UInt64.max), "16.0 EiB")
     }
   }
   @MainActor func testUnusedMenuBarDoesNotConstructHiddenContent() {

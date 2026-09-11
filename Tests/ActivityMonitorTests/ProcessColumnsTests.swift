@@ -104,6 +104,7 @@ final class ProcessColumnsTests: XCTestCase {
     var a = try XCTUnwrap(Collector().collect().processes.first { $0.id == getpid() })
     a.id = 1
     a.cpu = 90
+    a.cpuSampleAvailable = true
     a.name = "Windows 11"
     a.executableName = "prl_vm_app"
     a.details.ports = 2

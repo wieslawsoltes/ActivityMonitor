@@ -81,19 +81,29 @@ struct ProcessListSelection {
   }
 }
 
-func processClipboard(_ rows: [ProcessRow], keys: [String], metric: Metric) -> String {
+func processClipboard(
+  _ rows: [ProcessRow], keys: [String], metric: Metric,
+  usage: [Int32: ProcessSubtreeUsage]? = nil
+) -> String {
   let titles = Dictionary(
     uniqueKeysWithValues: ProcessColumns.available(metric).map { ($0.id, $0.title) })
   func clean(_ text: String) -> String {
     text.replacingOccurrences(of: "\t", with: " ").replacingOccurrences(of: "\n", with: " ")
       .replacingOccurrences(of: "\r", with: " ")
   }
-  let header = keys.map { $0 == "name" ? "Process name" : titles[$0] ?? $0 }.joined(separator: "\t")
+  let header = keys.map { key in
+    let title = key == "name" ? "Process name" : titles[key] ?? key
+    return usage != nil && ProcessUsageMetric.resolve(key, metric: metric) != nil
+      ? "Σ " + title : title
+  }.joined(separator: "\t")
   return
     ([header]
     + rows.map { row in
       keys.map { key in
-        clean(key == "name" ? row.name : ProcessValues.text(row, key: key, metric: metric))
+        clean(
+          key == "name"
+            ? row.name
+            : ProcessValues.text(row, key: key, metric: metric, usage: usage?[row.id]))
       }.joined(separator: "\t")
     }).joined(separator: "\n")
 }

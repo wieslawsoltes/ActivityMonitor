@@ -47,18 +47,20 @@ final class ProcessTreeTests: XCTestCase {
         let query = ProcessQuery(
           metric: metric, query: "", filter: "All processes", sort: "primary",
           descending: descending)
-        let sorted = query.apply(rows)
         let snapshot = ProcessTreeSnapshot.build(rows, query: query)
         XCTAssertEqual(Set(snapshot.entries.map(\.id)), Set(rows.map(\.id)))
         XCTAssertEqual(snapshot.entries.count, rows.count)
-        for parent in [Int32(10), 20] {
-          XCTAssertEqual(
-            snapshot.entries.filter { $0.parentID == parent }.map(\.id),
-            sorted.filter { $0.parent == parent }.map(\.id))
-        }
+        // Every root/subtree is larger than its next sibling in this fixture,
+        // even where its own counter is smaller. CPU grandchildren run in the
+        // opposite order from the increasing byte/GPU fixtures.
+        let branch: [Int32] = descending ? [20, 50] : [50, 20]
+        let cpuOrder = metric == .cpu || metric == .energy
+        let children: [Int32] = (descending == cpuOrder) ? [30, 40] : [40, 30]
+        XCTAssertEqual(snapshot.entries.filter { $0.parentID == 10 }.map(\.id), branch)
+        XCTAssertEqual(snapshot.entries.filter { $0.parentID == 20 }.map(\.id), children)
         XCTAssertEqual(
           snapshot.entries.filter { $0.depth == 0 }.map(\.id),
-          sorted.filter { $0.parent == -1 }.map(\.id))
+          descending ? [10, 60] : [60, 10])
         for entry in snapshot.entries where entry.parentID != nil {
           XCTAssertLessThan(
             snapshot.entries.firstIndex { $0.id == entry.parentID }!,
@@ -126,6 +128,8 @@ final class ProcessTreeTests: XCTestCase {
       sortedRows: rows.reversed(), matchingIDs: [12_000], filtered: true)
     XCTAssertEqual(snapshot.entries.count, 12_000)
     XCTAssertEqual(snapshot.entries.last?.depth, 11_999)
+    XCTAssertEqual(snapshot.usageByID[1]?.processCount, 12_000)
+    XCTAssertEqual(snapshot.usageByID[6000]?.processCount, 6001)
     XCTAssertEqual(snapshot.visible(collapsed: [ProcessIdentity(rows[0])]).map(\.id), [1])
     XCTAssertEqual(snapshot.branch(6000).count, 6001)
     XCTAssertEqual(snapshot.visible(collapsed: []).count, rows.count)

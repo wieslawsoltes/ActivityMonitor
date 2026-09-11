@@ -126,6 +126,7 @@ final class ProcessListInteractionsTests: XCTestCase {
   func testAdditionalFiltersUseKnownSamplesAndSelectedSnapshot() throws {
     var row = try XCTUnwrap(Collector().collect().processes.first { $0.id == getpid() })
     row.cpu = 2
+    row.cpuSampleAvailable = true
     row.accessible = true
     row.gpuPercent = 5
     func query(_ filter: String) -> ProcessQuery {

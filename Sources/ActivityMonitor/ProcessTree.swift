@@ -16,6 +16,7 @@ struct ProcessTreeEntry: Identifiable, Equatable {
   var parentName: String? = nil
   var isContext = false
   var expanded = true
+  var usage: ProcessSubtreeUsage? = nil
   var id: Int32 { row.id }
   var identity: ProcessIdentity { ProcessIdentity(row) }
 }
@@ -25,12 +26,16 @@ struct ProcessTreeSnapshot {
   var entries: [ProcessTreeEntry] = []
   var parents: [Int32: Int32] = [:]
   var rowsByID: [Int32: ProcessRow] = [:]
+  var usageByID: [Int32: ProcessSubtreeUsage] = [:]
   var matchingIDs: Set<Int32> = []
   var filtered = false
 
   init() {}
 
-  init(sortedRows: [ProcessRow], matchingIDs: Set<Int32>? = nil, filtered: Bool = false) {
+  init(
+    sortedRows: [ProcessRow], matchingIDs: Set<Int32>? = nil, filtered: Bool = false,
+    ordering: ProcessQuery? = nil
+  ) {
     // Snapshot races must not create duplicate row identities.
     var rows: [ProcessRow] = []
     for row in sortedRows where rowsByID[row.id] == nil {
@@ -65,12 +70,28 @@ struct ProcessTreeSnapshot {
       checked.formUnion(path)
     }
 
+    // Reduce leaves into their direct parent exactly once. The complete forest
+    // is accounted before either filtering or collapse hides any descendants.
+    var remainingChildren: [Int32: Int] = [:]
+    for row in rows {
+      usageByID[row.id] = ProcessSubtreeUsage(row)
+      if let parent = parents[row.id] { remainingChildren[parent, default: 0] += 1 }
+    }
+    var ready = rows.filter { remainingChildren[$0.id] == nil }.map(\.id)
+    while let id = ready.popLast() {
+      guard let parent = parents[id], let usage = usageByID[id] else { continue }
+      usageByID[parent]?.add(usage)
+      remainingChildren[parent, default: 0] -= 1
+      if remainingChildren[parent] == 0 { ready.append(parent) }
+    }
+
     var included = Set<Int32>()
     for id in self.matchingIDs where rowsByID[id] != nil {
       var cursor: Int32? = id
       while let next = cursor, included.insert(next).inserted { cursor = parents[next] }
     }
-    let includedRows = rows.filter { included.contains($0.id) }
+    let orderedRows = ordering?.apply(rows, usage: usageByID) ?? rows
+    let includedRows = orderedRows.filter { included.contains($0.id) }
     var children: [Int32: [ProcessRow]] = [:]
     var roots: [ProcessRow] = []
     for row in includedRows {
@@ -87,7 +108,7 @@ struct ProcessTreeSnapshot {
         ProcessTreeEntry(
           row: row, depth: depth, hasChildren: !descendants.isEmpty,
           parentID: parents[row.id], parentName: parents[row.id].flatMap { rowsByID[$0]?.name },
-          isContext: !self.matchingIDs.contains(row.id)))
+          isContext: !self.matchingIDs.contains(row.id), usage: usageByID[row.id]))
       for child in descendants.reversed() { pending.append((child, depth + 1)) }
     }
   }
@@ -95,7 +116,7 @@ struct ProcessTreeSnapshot {
   static func build(
     _ rows: [ProcessRow], query: ProcessQuery, matches: [ProcessRow]? = nil
   ) -> Self {
-    let matching = matches ?? query.apply(rows)
+    let matching = matches ?? rows.filter(query.matches)
     let filtered =
       !query.query.isEmpty
       || !["All processes", "All processes, hierarchically"].contains(query.filter)
@@ -103,8 +124,8 @@ struct ProcessTreeSnapshot {
     ordering.query = ""
     ordering.filter = "All processes"
     return Self(
-      sortedRows: filtered ? ordering.apply(rows) : matching,
-      matchingIDs: Set(matching.map(\.id)), filtered: filtered)
+      sortedRows: rows, matchingIDs: Set(matching.map(\.id)), filtered: filtered,
+      ordering: ordering)
   }
 
   func visible(collapsed: Set<ProcessIdentity>) -> [ProcessTreeEntry] {
@@ -267,7 +288,13 @@ enum ProcessTreeGeometry {
     let font = NSFont.systemFont(ofSize: 12)
     let widest = entries.reduce(CGFloat(0)) { width, entry in
       let text = (entry.row.name as NSString).size(withAttributes: [.font: font]).width
-      return max(width, text + 90 + CGFloat(entry.depth) * 14 + (entry.isContext ? 44 : 0))
+      let count = entry.usage?.processCount ?? 1
+      let badge: CGFloat =
+        count > 1
+        ? ("Σ \(count)" as NSString).size(withAttributes: [.font: NSFont.systemFont(ofSize: 9)])
+          .width + 20
+        : 0
+      return max(width, text + 90 + CGFloat(entry.depth) * 14 + (entry.isContext ? 44 : 0) + badge)
     }
     return ProcessColumnWidths.clamp(ceil(widest), key: "name")
   }

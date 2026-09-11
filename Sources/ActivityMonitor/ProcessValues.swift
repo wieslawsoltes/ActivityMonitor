@@ -1,6 +1,6 @@
 import Foundation
 
-enum ProcessSortValue {
+enum ProcessSortValue: Equatable {
   case integer(UInt64)
   case number(Double)
   case text(String)
@@ -17,14 +17,17 @@ enum ProcessSortValue {
 }
 
 enum ProcessValues {
-  static func value(_ p: ProcessRow, key: String, metric: Metric) -> ProcessSortValue? {
+  static func value(
+    _ p: ProcessRow, key: String, metric: Metric, usage: ProcessSubtreeUsage? = nil
+  ) -> ProcessSortValue? {
     let key = ProcessColumns.canonical(key, metric: metric)
+    if let usage, let counter = ProcessUsageMetric(rawValue: key) { return usage[counter].value }
     switch key {
     case "name": return .text(p.name)
     case "kind": return .text(p.kind)
     case "user": return .text(p.user)
     case "pid": return .integer(UInt64(max(0, p.id)))
-    case "cpu": return p.accessible ? .number(p.cpu) : nil
+    case "cpu": return p.accessible && p.cpuSampleAvailable != false ? .number(p.cpu) : nil
     case "time": return p.accessible ? .number(p.cpuTime) : nil
     case "threads": return p.accessible ? .integer(UInt64(p.threads)) : nil
     case "memory": return p.accessible ? .integer(p.memory) : nil
@@ -49,9 +52,21 @@ enum ProcessValues {
     default: return nil
     }
   }
-  static func text(_ p: ProcessRow, key: String, metric: Metric) -> String {
+  static func text(
+    _ p: ProcessRow, key: String, metric: Metric, usage: ProcessSubtreeUsage? = nil
+  ) -> String {
     let key = ProcessColumns.canonical(key, metric: metric)
-    guard let value = value(p, key: key, metric: metric) else { return "—" }
+    guard let value = value(p, key: key, metric: metric, usage: usage) else { return "—" }
+    let partial =
+      usage.flatMap { usage in
+        ProcessUsageMetric(rawValue: key).map {
+          usage[$0].isPartial(processCount: usage.processCount)
+        }
+      } ?? false
+    return (partial ? "≥" : "") + text(value, key: key)
+  }
+
+  static func text(_ value: ProcessSortValue, key: String) -> String {
     switch value {
     case .text(let text): return text
     case .integer(let count):
@@ -64,7 +79,10 @@ enum ProcessValues {
       if ["sandbox", "restricted", "sleep"].contains(key) { return count == 0 ? "No" : "Yes" }
       return String(count)
     case .number(let number):
-      if key == "gpuTime" { return gpuDuration(number) }
+      if key == "gpuTime" {
+        return number.isFinite && number >= Double(Int.max)
+          ? String(format: "%.0f s", number) : gpuDuration(number)
+      }
       if key == "time" { return duration(number) }
       return String(format: "%.1f", number)
     }
