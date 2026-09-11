@@ -167,6 +167,10 @@ final class PerformanceCorrectnessTests: XCTestCase {
     XCTAssertEqual(ProcessIconCache.retainedProcessCount, 1)
     ProcessIconCache.retain(identities: [:])
     XCTAssertEqual(ProcessIconCache.retainedProcessCount, 0)
+    for index in 0..<600 {
+      _ = ProcessIconCache.icon(pid: Int32(101_000 + index), start: UInt64(index + 1), isApp: false)
+    }
+    XCTAssertLessThanOrEqual(ProcessIconCache.retainedProcessCount, 128)
   }
   @MainActor func testMonitorCanDeallocateWhileSamplerSleeps() async {
     weak var released: Monitor?

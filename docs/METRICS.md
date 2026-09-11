@@ -18,6 +18,14 @@ Sources: Apple’s [`host_processor_info`](https://developer.apple.com/documenta
 
 Memory used is active + wired + compressed physical pages. Inactive pages are shown separately as cached/inactive. These categories are not a reproduction of Apple's private App Memory accounting. Process memory prefers physical footprint, falling back to resident size. Shared pages mean process totals do not necessarily sum to physical usage.
 
+The process **Memory** diagnostics page records a bounded fifteen-minute history of
+physical footprint, resident bytes, private/shared resident region bytes, compressed
+bytes and purgeable bytes. Footprint comes from `proc_pid_rusage`; task and region
+counters are independent and may be unavailable. Resident, private and shared values
+can overlap shared pages, so the chart and current/peak list are a diagnostic breakdown,
+not an additive decomposition of footprint. The JSON diagnostic export includes the
+history and retains missing values as `null`.
+
 Disk totals are process-lifetime counters, not whole-device totals. Throughput excludes processes that exit between samples and processes whose counters cannot be read. Per-process network bytes use Apple's `nettop -P -L 1 -n -x -J bytes_in,bytes_out` output and refresh every five seconds. Processes without observed network accounting show —. These counters follow the connections available to nettop and may differ from interface totals. Network interface totals aggregate non-loopback interfaces since their creation; VPN/bridge traffic may be counted at multiple interfaces. Interface removal/reset can interrupt a rate interval. Histories remain in memory for fifteen minutes and begin at app launch; pausing stops collection.
 
 Apple's proprietary per-process Energy Impact, 12-hour power, App Nap, and per-process packet counts are not implemented or fabricated. Sampling and open-file inspection may be denied for protected processes. This app does not elevate privileges or bypass macOS protections.
@@ -29,6 +37,14 @@ Exports and reports are written only to a user-chosen local location. `sample` m
 Device enumeration uses Metal and public IOKit registry-reading APIs. `IOAccelerator` performance statistics supply device, renderer and tiler percentages. `GPU Activity(%)` is supported as an alternate device-utilization key. Device IDs are matched to Metal registry IDs directly or through their ancestors, keeping histories separate when more than one GPU is present. Selecting a device changes the overview; process counters always cover **all reporting devices**.
 
 GPU memory is driver-reported system memory in use / allocated, where available. Allocation is not VRAM capacity, and unified memory is shared with the rest of the system. No total is invented from Metal's recommended working-set budget. Renderer and tiler can overlap and must not be summed.
+
+The process **GPU** diagnostics page charts the aggregate in-use and allocated device
+totals and lists each currently visible device. The aggregate is shown only when every
+visible device supplied the counter; a partial sum is reported as unavailable. Public
+Metal and IOKit APIs expose these device totals but do not expose a reliable allocation
+total attributable to one process. The process row therefore remains explicitly
+unavailable while per-process GPU execution time continues to use the driver client
+counters described below.
 
 Per-process data comes from accelerator clients' `IOUserClientCreator` PID and `AppUsage[].accumulatedGPUTime` counters. The counter is interpreted as nanoseconds; this conversion was checked against Apple's GPU Time display on an M3 Pro. Process GPU percentage is the sum of valid counter deltas, divided by monotonic elapsed time and multiplied by 100. It is driver-reported GPU time, not a command buffer's elapsed duration or a share of the device graph. Overlapping work can produce rates above 100%.
 

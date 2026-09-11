@@ -90,7 +90,7 @@ extension DiagnosticTab {
     case .energy: return "CPU workload, wake-ups and power assertions."
     case .disk: return "Read and write activity for this process."
     case .network: return "Traffic, connections and listening ports."
-    case .gpu: return "Graphics activity across reporting devices."
+    case .gpu: return "Graphics activity and device memory across reporting devices."
     case .threads: return "Thread activity, CPU time and scheduling."
     case .files: return "Open descriptors and their underlying resources."
     case .connections: return "Network endpoints, socket state and queues."

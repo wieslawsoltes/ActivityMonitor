@@ -18,7 +18,7 @@ import SwiftUI
       guard let self, let monitor, let date else { return }
       for session in self.sessions.values {
         session.sourcePaused = paused
-        session.accept(rows: monitor.rows, date: date)
+        session.accept(rows: monitor.rows, date: date, gpuDevices: monitor.gpuDevices)
         session.refreshThreadActivity()
         if (self.detailLeases[session.id] ?? 0) > 0 { session.refreshDetails() }
       }
@@ -31,7 +31,8 @@ import SwiftUI
     leases[id, default: 0] += 1
     if details { detailLeases[id, default: 0] += 1 }
     session.sourcePaused = monitor?.paused ?? false
-    session.accept(rows: [row], date: monitor?.lastUpdate ?? Date())
+    session.accept(
+      rows: [row], date: monitor?.lastUpdate ?? Date(), gpuDevices: monitor?.gpuDevices ?? [])
     if details { session.refreshDetails() }
     return session
   }

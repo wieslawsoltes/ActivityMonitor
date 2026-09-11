@@ -197,6 +197,9 @@ enum DiagnosticCommand {
   }
   @Published private(set) var exited = false
   @Published private(set) var histories: [ProcessActivitySample] = []
+  @Published private(set) var memoryHistory: [ProcessMemorySample] = []
+  @Published private(set) var gpuMemoryHistory: [ProcessGPUMemorySample] = []
+  @Published private(set) var gpuMemoryDevices: [GPUDeviceSample] = []
   @Published private(set) var fields: [DiagnosticField] = []
   @Published private(set) var sections: [DiagnosticTab: DiagnosticSection] = [:]
   @Published private(set) var collecting = false
@@ -235,7 +238,44 @@ enum DiagnosticCommand {
   var state: String {
     exited ? "Exited · Last snapshot" : paused ? "Paused" : sourcePaused ? "Monitor paused" : "Live"
   }
-  func accept(rows: [ProcessRow], date: Date) {
+  private func appendMemory(_ sample: ProcessMemorySample) {
+    if let index = memoryHistory.firstIndex(where: { $0.date == sample.date }) {
+      // A diagnostic refresh can fill in private/shared bytes for the process sample
+      // already collected by the live monitor.
+      var merged = memoryHistory[index]
+      merged.footprint = sample.footprint ?? merged.footprint
+      merged.resident = sample.resident ?? merged.resident
+      merged.privateBytes = sample.privateBytes ?? merged.privateBytes
+      merged.sharedBytes = sample.sharedBytes ?? merged.sharedBytes
+      merged.compressed = sample.compressed ?? merged.compressed
+      merged.purgeable = sample.purgeable ?? merged.purgeable
+      memoryHistory[index] = merged
+      return
+    }
+    if memoryHistory.last?.date ?? .distantPast <= sample.date {
+      memoryHistory.append(sample)
+    } else {
+      let index = memoryHistory.firstIndex { $0.date > sample.date } ?? memoryHistory.endIndex
+      memoryHistory.insert(sample, at: index)
+    }
+    let cutoff = sample.date.addingTimeInterval(-900)
+    memoryHistory.removeAll { $0.date < cutoff }
+    if memoryHistory.count > 901 { memoryHistory.removeFirst(memoryHistory.count - 901) }
+  }
+  private func appendGPUMemory(_ sample: ProcessGPUMemorySample) {
+    if let index = gpuMemoryHistory.firstIndex(where: { $0.date == sample.date }) {
+      gpuMemoryHistory[index] = sample
+    } else if gpuMemoryHistory.last?.date ?? .distantPast <= sample.date {
+      gpuMemoryHistory.append(sample)
+    } else {
+      let index = gpuMemoryHistory.firstIndex { $0.date > sample.date } ?? gpuMemoryHistory.endIndex
+      gpuMemoryHistory.insert(sample, at: index)
+    }
+    let cutoff = sample.date.addingTimeInterval(-900)
+    gpuMemoryHistory.removeAll { $0.date < cutoff }
+    if gpuMemoryHistory.count > 901 { gpuMemoryHistory.removeFirst(gpuMemoryHistory.count - 901) }
+  }
+  func accept(rows: [ProcessRow], date: Date, gpuDevices: [GPUDeviceSample] = []) {
     guard !exited else { return }
     guard let current = rows.first(where: { $0.id == id.pid && $0.start == id.start }) else {
       // An incomplete global sample is not proof of exit.
@@ -265,6 +305,22 @@ enum DiagnosticCommand {
         wakeups: current.details.wakeups))
     histories.removeAll { $0.date < date.addingTimeInterval(-900) }
     if histories.count > 3601 { histories.removeFirst(histories.count - 3601) }
+    appendMemory(
+      .init(
+        date: date,
+        footprint: current.accessible ? current.memory : nil,
+        resident: current.accessible ? current.resident : nil,
+        privateBytes: current.details.privateMemory,
+        sharedBytes: current.details.sharedMemory,
+        compressed: current.details.compressed,
+        purgeable: current.details.purgeable))
+    gpuMemoryDevices = gpuDevices
+    appendGPUMemory(
+      .init(
+        date: date,
+        used: aggregateGPUBytes(gpuDevices.map(\.memoryUsed)),
+        allocated: aggregateGPUBytes(gpuDevices.map(\.memoryAllocated)),
+        deviceCount: gpuDevices.count))
     previous = current
     previousDate = date
     row = current
@@ -320,6 +376,7 @@ enum DiagnosticCommand {
       }
       self.collectionStatus = nil
       self.fields = snapshot.fields
+      if let memory = snapshot.memory { self.appendMemory(memory) }
       if let section = snapshot.section { self.sections[requested] = section }
       self.collectedTab = requested
       self.lastCollection = Date()
@@ -369,12 +426,17 @@ enum DiagnosticCommand {
       var status: String
       var fields: [DiagnosticField]
       var history: [ProcessActivitySample]
+      var memoryHistory: [ProcessMemorySample]
+      var gpuMemoryHistory: [ProcessGPUMemorySample]
+      var gpuMemoryDevices: [GPUDeviceSample]
       var sections: [String: DiagnosticSection]
       var report: ProcessReport?
       var threadCPU: [CPUUsageSeries]
     }
     let value = Export(
       identity: id, process: row, status: state, fields: fields, history: histories,
+      memoryHistory: memoryHistory, gpuMemoryHistory: gpuMemoryHistory,
+      gpuMemoryDevices: gpuMemoryDevices,
       sections: Dictionary(uniqueKeysWithValues: sections.map { ($0.key.rawValue, $0.value) }),
       report: report, threadCPU: threadCPU)
     let encoder = JSONEncoder()
@@ -388,6 +450,18 @@ enum DiagnosticCommand {
       tab = .reports
     }
   }
+}
+/// Sum a device counter only when every visible device reported it. A partial sum would
+/// understate the machine total and make the chart look precise when one device is unknown.
+func aggregateGPUBytes(_ values: [UInt64?]) -> UInt64? {
+  guard !values.isEmpty, values.allSatisfy({ $0 != nil }) else { return nil }
+  var total: UInt64 = 0
+  for value in values.compactMap({ $0 }) {
+    let (next, overflow) = total.addingReportingOverflow(value)
+    guard !overflow else { return nil }
+    total = next
+  }
+  return total
 }
 enum DiagnosticExport {
   @MainActor static func save(_ data: Data, name: String) throws {

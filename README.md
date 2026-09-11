@@ -42,7 +42,7 @@ Keep an eye on performance, understand resource usage, and find the processes th
 
 ## A workspace for each process
 
-Right-click a process and choose **Process diagnostics…**. Follow its CPU, memory, energy, disk, network and GPU activity, then inspect individual threads, open files, listening ports and memory mappings. Compare memory by protection, inspect virtual address ranges, and rank mapped images by resident or virtual size. Resize and reorder columns, filter entries, copy rows, and export the details you need.
+Right-click a process and choose **Process diagnostics…**. Follow its CPU, memory, energy, disk, network and GPU activity, then inspect individual threads, open files, listening ports and memory mappings. Memory and GPU pages include native composition charts and current/peak lists; device GPU memory is shown when the driver reports it, while public macOS APIs do not expose per-process GPU allocation bytes. Compare memory by protection, inspect virtual address ranges, and rank mapped images by resident or virtual size. Resize and reorder columns, filter entries, copy rows, and export the details you need.
 
 Keep several process monitors open as independent tool windows, float one above your workspace, or pin a process to the menu bar with your preferred live metric. Collect stack samples, virtual-memory reports, launch arguments and code-signing details without leaving the process workspace.
 
@@ -101,7 +101,7 @@ GPU availability depends on your Mac and its driver. Process counters cover all 
 
 ## Smoother everyday monitoring
 
-Tabs respond across their full bounds. Clear hover, press and search-focus feedback makes controls easier to use, while a lighter process table reduces the work needed to switch views. Monitoring updates every second by default, with two- and five-second options. See the [profiling results](docs/performance/README.md).
+Tabs respond across their full bounds. Clear hover, press and search-focus feedback makes controls easier to use, while a lighter process table reduces the work needed to switch views. Monitoring updates every second by default, with two- and five-second options. See the [profiling results](docs/performance/README.md) and [memory accounting notes](docs/performance/MEMORY.md).
 
 ## Installation
 

@@ -66,6 +66,27 @@ struct DiagnosticRecord: Codable, Equatable, Identifiable {
   var numbers: [String: Double] = [:]
   var path: String? = nil
 }
+/// A point-in-time process memory breakdown. Values are optional because task and
+/// region inspection can be denied independently by macOS.
+struct ProcessMemorySample: Codable, Equatable, Identifiable {
+  var id: Date { date }
+  var date: Date
+  var footprint: UInt64?
+  var resident: UInt64?
+  var privateBytes: UInt64?
+  var sharedBytes: UInt64?
+  var compressed: UInt64?
+  var purgeable: UInt64?
+}
+/// macOS exposes GPU allocation totals per device, while public APIs do not expose
+/// an allocation total attributable to an individual process.
+struct ProcessGPUMemorySample: Codable, Equatable, Identifiable {
+  var id: Date { date }
+  var date: Date
+  var used: UInt64?
+  var allocated: UInt64?
+  var deviceCount: Int
+}
 struct DiagnosticSection: Codable, Equatable {
   var columns: [String] = []
   var records: [DiagnosticRecord] = []
@@ -77,6 +98,7 @@ struct DiagnosticSnapshot: Codable {
   var date = Date()
   var fields: [DiagnosticField] = []
   var section: DiagnosticSection?
+  var memory: ProcessMemorySample? = nil
   var tab: DiagnosticTab
   var valid = true
   var identityStatus: ProcessIdentityStatus = .matching
@@ -167,18 +189,36 @@ enum DiagnosticCollector {
       }
     }
     if tab == .memory {
-      var memory = AMMemoryDetails()
-      am_memory_details(identity.pid, &memory)
-      if memory.vmAccessible != 0 {
-        snapshot.fields.append(.init("Purgeable memory", bytes(memory.purgeable)))
-        snapshot.fields.append(.init("Compressed memory", bytes(memory.compressed)))
+      var details = AMMemoryDetails()
+      am_memory_details(identity.pid, &details)
+      var memory = ProcessMemorySample(
+        date: snapshot.date,
+        footprint: nil,
+        resident: error == 0 && info.taskError == 0 ? info.residentBytes : nil,
+        privateBytes: nil,
+        sharedBytes: nil,
+        compressed: details.vmAccessible != 0 ? details.compressed : nil,
+        purgeable: details.vmAccessible != 0 ? details.purgeable : nil)
+      var usageInfo = rusage_info_v4()
+      let usageStatus = withUnsafeMutablePointer(to: &usageInfo) { pointer in
+        pointer.withMemoryRebound(to: rusage_info_t?.self, capacity: 1) {
+          proc_pid_rusage(identity.pid, RUSAGE_INFO_V4, $0)
+        }
       }
-      if let memory = ProcessMemoryRegions.read(
+      if usageStatus == 0 {
+        memory.footprint = usageInfo.ri_phys_footprint
+      }
+      if let usage = ProcessMemoryRegions.read(
         pid: identity.pid, translated: info.flags & 0x0200_0000 != 0)
       {
-        snapshot.fields.append(.init("Real private memory", bytes(memory.privateBytes)))
-        snapshot.fields.append(.init("Real shared memory", bytes(memory.sharedBytes)))
+        memory.privateBytes = usage.privateBytes
+        memory.sharedBytes = usage.sharedBytes
       }
+      if let value = memory.purgeable { snapshot.fields.append(.init("Purgeable memory", bytes(value))) }
+      if let value = memory.compressed { snapshot.fields.append(.init("Compressed memory", bytes(value))) }
+      if let value = memory.privateBytes { snapshot.fields.append(.init("Real private memory", bytes(value))) }
+      if let value = memory.sharedBytes { snapshot.fields.append(.init("Real shared memory", bytes(value))) }
+      snapshot.memory = memory
     }
     if tab == .energy {
       var assertions: Unmanaged<CFDictionary>?

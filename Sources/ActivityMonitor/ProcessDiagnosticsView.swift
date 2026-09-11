@@ -61,7 +61,7 @@ enum ProcessActivityPresentation {
     switch metric {
     case .cpu: return CPUAccounting.processHelp
     case .memory:
-      return "Memory shows physical footprint. Memory regions provide mapping-level resident usage."
+      return "Memory shows physical footprint with resident, private, shared, compressed and purgeable counters where macOS permits access. Memory regions provide mapping-level resident usage."
     case .energy:
       return
         "CPU workload is a proxy, not Apple’s Energy Impact score. App Nap and Energy Impact are unavailable through public process APIs."
@@ -73,7 +73,7 @@ enum ProcessActivityPresentation {
         "Receive is above the baseline; send is below. Network counters refresh approximately every five seconds; observed rates can be bursty."
     case .gpu:
       return
-        "GPU execution rate can exceed 100% when work overlaps. Observed GPU time covers this app session; unsupported counters remain unavailable."
+        "GPU execution rate can exceed 100% when work overlaps. Device memory is driver-reported across the visible GPUs; public macOS APIs do not expose per-process allocation bytes. Observed GPU time covers this app session."
     }
   }
 }
@@ -232,6 +232,15 @@ struct ProcessDiagnosticsView: View {
       ScrollView {
         VStack(alignment: .leading, spacing: 16) {
           activityChart(metric)
+          if metric == .memory {
+            ProcessMemoryVisualization(
+              history: session.memoryHistory, theme: theme, range: session.range)
+          }
+          if metric == .gpu {
+            ProcessGPUMemoryVisualization(
+              history: session.gpuMemoryHistory, devices: session.gpuMemoryDevices,
+              theme: theme, range: session.range)
+          }
           DiagnosticPanel(theme: theme) {
             VStack(alignment: .leading, spacing: 14) {
               panelTitle("Process counters", icon: metric.icon)
