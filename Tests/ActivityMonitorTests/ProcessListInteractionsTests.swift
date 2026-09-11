@@ -113,11 +113,15 @@ final class ProcessListInteractionsTests: XCTestCase {
       return row
     }
     let rows = [row(3, 1), row(2, 1), row(1, 0), row(5, 6), row(6, 5), row(4, 2)]
-    let expanded = ProcessHierarchy.entries(rows, collapsed: [])
+    let expanded = ProcessTreeSnapshot(sortedRows: rows).visible(collapsed: [])
     XCTAssertEqual(expanded.map(\.id), [1, 3, 2, 4, 5, 6])
     XCTAssertEqual(expanded.map(\.depth), [0, 1, 1, 2, 0, 1])
-    XCTAssertEqual(ProcessHierarchy.entries(rows, collapsed: [1]).map(\.id), [1, 5, 6])
-    XCTAssertEqual(ProcessHierarchy.entries(rows, collapsed: [2]).map(\.id), [1, 3, 2, 5, 6])
+    XCTAssertEqual(
+      ProcessTreeSnapshot(sortedRows: rows).visible(collapsed: [ProcessIdentity(rows[2])]).map(
+        \.id), [1, 5, 6])
+    XCTAssertEqual(
+      ProcessTreeSnapshot(sortedRows: rows).visible(collapsed: [ProcessIdentity(rows[1])]).map(
+        \.id), [1, 3, 2, 5, 6])
   }
   func testAdditionalFiltersUseKnownSamplesAndSelectedSnapshot() throws {
     var row = try XCTUnwrap(Collector().collect().processes.first { $0.id == getpid() })

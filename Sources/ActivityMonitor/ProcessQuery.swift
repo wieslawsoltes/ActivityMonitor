@@ -9,7 +9,7 @@ struct ProcessQuery: Equatable {
   var descending: Bool
   var selected: Set<Int32> = []
   static let filters = [
-    "All processes", "All processes, hierarchically", "My processes", "System processes",
+    "All processes", "My processes", "System processes",
     "Other users’ processes", "Active processes", "Inactive processes", "GPU processes",
     "Windowed processes", "Selected processes", "Applications",
   ]

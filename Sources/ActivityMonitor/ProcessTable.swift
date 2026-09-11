@@ -12,6 +12,9 @@ struct MonitorProcessTable: View {
   let theme: MonitorTheme
   @Binding var query: String
   @Binding var filter: String
+  @Binding var mode: ProcessViewMode
+  @ObservedObject var tree: ProcessTreePresentation
+  let sourceRows: [ProcessRow]
   @Binding var selection: Int32?
   @Binding var selectedIDs: Set<Int32>
   @Binding var inspector: Bool
@@ -34,13 +37,10 @@ struct MonitorProcessTable: View {
   @State private var viewportWidth: CGFloat?
   @State private var horizontalOffset: CGFloat = 0
   @AppStorage("processColumnOrder.v1") private var columnOrder = "{}"
-  @State private var selectionAnchor: Int32?
-  @State private var selectedStarts: [Int32: UInt64] = [:]
-  @State private var collapsed: Set<Int32> = []
-  var hierarchy: Bool { filter == "All processes, hierarchically" }
+  var hierarchy: Bool { mode == .tree }
   var entries: [ProcessTreeEntry] {
     hierarchy
-      ? ProcessHierarchy.entries(rows, collapsed: query.isEmpty ? collapsed : [])
+      ? tree.entries
       : rows.map { ProcessTreeEntry(row: $0, depth: 0, hasChildren: false) }
   }
   var displayRows: [ProcessRow] { entries.map(\.row) }
@@ -48,7 +48,7 @@ struct MonitorProcessTable: View {
   var orderedKeys: [String] {
     orderPreferences.ordered(["name"] + columns.map(\.id), metric: metric)
   }
-  var selectedRows: [ProcessRow] { rows.filter { selectedIDs.contains($0.id) } }
+  var selectedRows: [ProcessRow] { displayRows.filter { selectedIDs.contains($0.id) } }
   var widthPreferences: ProcessColumnWidths {
     var value = ProcessColumnWidths(columnWidths)
     for (key, width) in draftWidths { value.set(key, metric: metric, width: width) }
@@ -108,7 +108,14 @@ struct MonitorProcessTable: View {
               row: row, index: index, layout: layout, metric: metric, theme: theme,
               columns: visibleColumns, selectedSet: selectedIDs, hierarchical: hierarchy,
               depth: entry.depth, hasChildren: entry.hasChildren,
-              expanded: !collapsed.contains(row.id), toggleExpanded: { toggleExpanded(row.id) },
+              expanded: entry.expanded, isContext: entry.isContext,
+              parentID: entry.parentID, parentName: entry.parentName,
+              toggleExpanded: {
+                tree.toggle(row.id, recursive: NSEvent.modifierFlags.contains(.option))
+              },
+              expandBranch: { tree.setExpanded(row.id, true, recursive: true) },
+              collapseBranch: { tree.setExpanded(row.id, false, recursive: true) },
+              selectParent: { if let parent = entry.parentID { selectOnly(parent) } },
               isSelected: selectedIDs.contains(row.id),
               select: {
                 selectRow(row.id)
@@ -122,7 +129,8 @@ struct MonitorProcessTable: View {
           }.frame(width: layout.total)
             .background(
               ProcessTableSelectionScroll(
-                selectedID: selection, rowIndex: visibleEntries.firstIndex { $0.id == selection }))
+                selectedID: selection, rowIndex: visibleEntries.firstIndex { $0.id == selection },
+                revealRevision: tree.revealRevision))
         }.defaultScrollAnchor(.topLeading)
           .overlay(alignment: .topLeading) {
             VStack(spacing: 0) {
@@ -163,26 +171,20 @@ struct MonitorProcessTable: View {
             move(max(1, Int(g.size.height / 41) - 3), extending: press.modifiers.contains(.shift))
             return .handled
           }
-          .onKeyPress(.leftArrow) {
+          .onKeyPress(.leftArrow, phases: .down) { press in
             guard hierarchy, let selection else { return .ignored }
-            if !collapsed.contains(selection),
-              entries.first(where: { $0.id == selection })?.hasChildren == true
-            {
-              collapsed.insert(selection)
-            } else if let parent = rows.first(where: { $0.id == selection })?.parent,
-              rows.contains(where: { $0.id == parent })
-            {
-              selectRow(parent)
-            }
+            selectOnly(
+              tree.navigate(selection, right: false, recursive: press.modifiers.contains(.option)))
             return .handled
           }
-          .onKeyPress(.rightArrow) {
+          .onKeyPress(.rightArrow, phases: .down) { press in
             guard hierarchy, let selection else { return .ignored }
-            if collapsed.contains(selection) { collapsed.remove(selection) } else { move(1) }
+            selectOnly(
+              tree.navigate(selection, right: true, recursive: press.modifiers.contains(.option)))
             return .handled
           }
           .onKeyPress(.return) {
-            if let p = rows.first(where: { $0.id == selection }) { inspect(p) }
+            if let p = displayRows.first(where: { $0.id == selection }) { inspect(p) }
             return .handled
           }
           .onKeyPress(.escape) {
@@ -209,21 +211,18 @@ struct MonitorProcessTable: View {
             }
             return .ignored
           }
-          .onAppear { availableWidth = g.size.width }
+          .onAppear {
+            availableWidth = g.size.width
+            if tree.selectedStarts.isEmpty { rememberSelection() }
+          }
           .onChange(of: selection) {
             if let selection, !selectedIDs.contains(selection) {
               selectedIDs = [selection]
-              selectionAnchor = selection
+              tree.selectionAnchor = selection
             }
             rememberSelection()
           }
-          .onChange(of: rows) {
-            let current = Dictionary(uniqueKeysWithValues: rows.map { ($0.id, $0.start) })
-            selectedIDs = selectedIDs.filter {
-              selectedStarts[$0] == nil || current[$0] == selectedStarts[$0]
-            }
-            if let selection, !selectedIDs.contains(selection) { self.selection = nil }
-          }
+          .onChange(of: visibleEntries.map(\.identity)) { reconcileSelection() }
           .onChange(of: g.size.width) { availableWidth = g.size.width }
           .onChange(of: metric) { draftWidths = [:] }
       }.background(theme.card).clipShape(
@@ -238,12 +237,18 @@ struct MonitorProcessTable: View {
       Text(metric == .energy ? "Applications" : "Processes").font(
         .system(size: 13, weight: .semibold)
       ).foregroundStyle(theme.text)
-      Text(selectedIDs.count > 1 ? "\(selectedIDs.count) selected" : rows.count.formatted()).font(
+      Text(
+        selectedIDs.count > 1
+          ? "\(selectedIDs.count) selected"
+          : hierarchy && tree.snapshot.filtered ? processCountLabel : rows.count.formatted()
+      ).font(
         .system(size: 10)
       ).foregroundStyle(theme.secondary).padding(
         .horizontal, 6
       ).padding(.vertical, 2).background(theme.subtle, in: RoundedRectangle(cornerRadius: 4))
         .overlay(RoundedRectangle(cornerRadius: 4).stroke(theme.border, lineWidth: 1))
+        .help(processCountHelp)
+      viewModePicker(compact: false)
       Spacer(minLength: 6)
       Menu {
         ForEach(ProcessQuery.filters, id: \.self) {
@@ -309,8 +314,8 @@ struct MonitorProcessTable: View {
     Button("Select all processes") { selectAllRows() }
     Button("Copy selected rows") { copyRows(selectedRows) }.disabled(selectedRows.isEmpty)
     if hierarchy {
-      Button("Expand all processes") { collapsed = [] }
-      Button("Collapse all processes") { collapsed = Set(rows.map(\.id)) }
+      Button("Expand all processes", action: tree.expandAll).disabled(!tree.hasBranches)
+      Button("Collapse all processes", action: tree.collapseAll).disabled(!tree.hasBranches)
     }
     Divider()
     Button("Reset column order") {
@@ -322,13 +327,11 @@ struct MonitorProcessTable: View {
       var value = ProcessColumnWidths(columnWidths)
       value.set(
         "name", metric: metric,
-        width: ProcessColumnLayout.fitted(
-          key: "name", title: "Process name", metric: metric, rows: rows))
+        width: fittedWidth("name", title: "Process name"))
       for column in columns {
         value.set(
           column.id, metric: metric,
-          width: ProcessColumnLayout.fitted(
-            key: column.id, title: column.title, metric: metric, rows: rows))
+          width: fittedWidth(column.id, title: column.title))
       }
       columnWidths = value.json
     }
@@ -374,7 +377,10 @@ struct MonitorProcessTable: View {
   var compactToolbar: some View {
     VStack(spacing: 8) {
       HStack(spacing: 8) {
-        Text("\(rows.count) processes").font(.system(size: 12, weight: .semibold))
+        Text(selectedIDs.count > 1 ? "\(selectedIDs.count) selected" : processCountLabel)
+          .font(.system(size: 12, weight: .semibold))
+          .lineLimit(1).help(processCountHelp)
+        viewModePicker(compact: true)
         Spacer(minLength: 0)
         Menu {
           Picker("Process filter", selection: $filter) {
@@ -474,7 +480,7 @@ struct MonitorProcessTable: View {
       fit: {
         resizeColumn(
           key,
-          width: ProcessColumnLayout.fitted(key: key, title: title, metric: metric, rows: rows),
+          width: fittedWidth(key, title: title),
           finished: true)
       },
       reset: { resetColumnWidth(key) })
@@ -494,8 +500,7 @@ struct MonitorProcessTable: View {
             Button("Fit column to contents") {
               resizeColumn(
                 key,
-                width: ProcessColumnLayout.fitted(
-                  key: key, title: title, metric: metric, rows: rows), finished: true)
+                width: fittedWidth(key, title: title), finished: true)
             }
             Button("Reset column width") { resetColumnWidth(key) }
             if let index = layout.order.firstIndex(of: key) {
@@ -543,15 +548,49 @@ struct MonitorProcessTable: View {
   func unavailableColumn(_ key: String) -> Bool {
     ProcessColumns.unavailableReason(key) != nil
   }
-  func toggleExpanded(_ id: Int32) {
-    if collapsed.contains(id) { collapsed.remove(id) } else { collapsed.insert(id) }
+  var processCountHelp: String {
+    hierarchy
+      ? "\(rows.count) matching processes, \(tree.contextCount) ancestors for context, \(entries.count) visible rows. Values are per process."
+      : "\(rows.count) matching processes"
+  }
+  var processCountLabel: String {
+    if hierarchy && tree.snapshot.filtered {
+      return "\(rows.count) \(rows.count == 1 ? "match" : "matches")"
+    }
+    return "\(rows.count) \(rows.count == 1 ? "process" : "processes")"
+  }
+  func viewModePicker(compact: Bool) -> some View {
+    ProcessViewModePicker(mode: $mode, theme: theme, compact: compact)
+      .contextMenu {
+        Button("Expand all processes", action: tree.expandAll).disabled(
+          !hierarchy || !tree.hasBranches)
+        Button("Collapse all processes", action: tree.collapseAll).disabled(
+          !hierarchy || !tree.hasBranches)
+      }
+  }
+  func fittedWidth(_ key: String, title: String) -> CGFloat {
+    if hierarchy && key == "name" {
+      return ProcessTreeGeometry.fittedNameWidth(tree.snapshot.entries)
+    }
+    return ProcessColumnLayout.fitted(key: key, title: title, metric: metric, rows: displayRows)
+  }
+  func reconcileSelection() {
+    let current = ProcessListSelection(
+      ids: selectedIDs, anchor: tree.selectionAnchor, lead: selection)
+    applySelection(tree.reconcile(current, visible: entries, source: sourceRows))
+  }
+  func selectOnly(_ id: Int32) {
+    applySelection(ProcessListSelection(ids: [id], anchor: id, lead: id))
+    focused = true
   }
   func rememberSelection() {
-    selectedStarts = Dictionary(
-      uniqueKeysWithValues: rows.filter { selectedIDs.contains($0.id) }.map { ($0.id, $0.start) })
+    tree.selectedStarts = Dictionary(
+      sourceRows.filter { selectedIDs.contains($0.id) }.map { ($0.id, $0.start) },
+      uniquingKeysWith: { first, _ in first })
   }
   func selectRow(_ id: Int32) {
-    var value = ProcessListSelection(ids: selectedIDs, anchor: selectionAnchor, lead: selection)
+    var value = ProcessListSelection(
+      ids: selectedIDs, anchor: tree.selectionAnchor, lead: selection)
     let modifiers = NSApp.currentEvent?.modifierFlags ?? NSEvent.modifierFlags
     value.select(
       id, order: displayRows.map(\.id), extending: modifiers.contains(.shift),
@@ -561,19 +600,20 @@ struct MonitorProcessTable: View {
   }
   func applySelection(_ value: ProcessListSelection) {
     selectedIDs = value.ids
-    selectionAnchor = value.anchor
+    tree.selectionAnchor = value.anchor
     selection = value.lead
     rememberSelection()
   }
   func move(_ delta: Int, extending: Bool = false) {
-    var value = ProcessListSelection(ids: selectedIDs, anchor: selectionAnchor, lead: selection)
+    var value = ProcessListSelection(
+      ids: selectedIDs, anchor: tree.selectionAnchor, lead: selection)
     value.move(delta, order: displayRows.map(\.id), extending: extending)
     applySelection(value)
   }
   func selectAllRows() {
     selectedIDs = Set(displayRows.map(\.id))
-    if selection == nil { selection = rows.first?.id }
-    selectionAnchor = displayRows.first?.id
+    if selection == nil { selection = displayRows.first?.id }
+    tree.selectionAnchor = displayRows.first?.id
     rememberSelection()
   }
   func copyRows(_ values: [ProcessRow]) {
@@ -597,7 +637,13 @@ private struct ProcessTableRow: View, Equatable {
   let depth: Int
   let hasChildren: Bool
   let expanded: Bool
+  let isContext: Bool
+  let parentID: Int32?
+  let parentName: String?
   let toggleExpanded: () -> Void
+  let expandBranch: () -> Void
+  let collapseBranch: () -> Void
+  let selectParent: () -> Void
   let isSelected: Bool
   let select: () -> Void
   let inspect: (ProcessRow) -> Void
@@ -614,48 +660,87 @@ private struct ProcessTableRow: View, Equatable {
       && lhs.hierarchical == rhs.hierarchical && lhs.selectedSet == rhs.selectedSet
       && lhs.depth == rhs.depth && lhs.hasChildren == rhs.hasChildren
       && lhs.expanded == rhs.expanded && lhs.canStopSelection == rhs.canStopSelection
+      && lhs.isContext == rhs.isContext && lhs.parentID == rhs.parentID
+      && lhs.parentName == rhs.parentName
+  }
+  private var indentation: CGFloat {
+    hierarchical ? ProcessTreeGeometry.indentation(depth: depth, width: layout.name) : 0
   }
   var body: some View {
-    Button {
-      select()
-    } label: {
-      ZStack(alignment: .leading) {
-        metricCells.frame(width: layout.total, height: 41)
-        HStack(spacing: 10) {
-          if hierarchical {
-            if hasChildren {
-              Image(systemName: expanded ? "chevron.down" : "chevron.right").font(
-                .system(size: 9, weight: .semibold)
-              )
-              .frame(width: 12, height: 30).contentShape(Rectangle()).onTapGesture(
-                perform: toggleExpanded
-              )
-              .accessibilityLabel(expanded ? "Collapse process" : "Expand process")
-            } else {
+    ZStack(alignment: .leading) {
+      Button {
+        select()
+      } label: {
+        ZStack(alignment: .leading) {
+          metricCells.frame(width: layout.total, height: 41)
+          HStack(spacing: 10) {
+            if hierarchical {
               Color.clear.frame(width: 12, height: 30)
             }
-          }
-          ProcessIcon(pid: row.id, isApp: row.isApp, start: row.start).frame(width: 24, height: 24)
-          Text(row.name).font(.system(size: 12)).foregroundStyle(theme.text).lineLimit(1)
+            ProcessIcon(pid: row.id, isApp: row.isApp, start: row.start).frame(
+              width: 24, height: 24)
+            Text(row.name).font(
+              .system(size: 12, weight: hierarchical && hasChildren ? .medium : .regular)
+            )
+            .foregroundStyle(isContext ? theme.secondary : theme.text).lineLimit(1)
             .truncationMode(.middle)
-        }.padding(.leading, 17 + (hierarchical ? CGFloat(min(depth, 12)) * 12 : 0)).padding(
-          .trailing, 17
-        ).frame(width: layout.name, alignment: .leading)
-          .offset(x: layout.offset("name"))
-      }.frame(height: 41).background(
-        isSelected
-          ? theme.selected
-          : hovered ? theme.hover : index % 2 == 1 ? theme.stripe : Color.clear
-      ).overlay(alignment: .leading) {
-        if isSelected { Rectangle().fill(theme.blue).frame(width: 2) }
-      }.overlay(alignment: .bottom) { Rectangle().fill(theme.separator).frame(height: 1) }
-        .contentShape(Rectangle())
-    }.buttonStyle(.plain).focusEffectDisabled().onHover { hovered = $0 }.help(rowHelp)
-      .simultaneousGesture(TapGesture(count: 2).onEnded { inspect(row) }).contextMenu {
+            if isContext && layout.name > 280 {
+              Text("Parent").font(.system(size: 9)).foregroundStyle(theme.secondary)
+                .padding(.horizontal, 5).padding(.vertical, 2)
+                .background(theme.subtle, in: RoundedRectangle(cornerRadius: 3))
+            }
+          }.padding(.leading, 17 + indentation).padding(
+            .trailing, 17
+          ).frame(width: layout.name, alignment: .leading)
+            .clipped()
+            .offset(x: layout.offset("name"))
+        }.frame(height: 41).background(
+          isSelected
+            ? theme.selected
+            : hovered ? theme.hover : index % 2 == 1 ? theme.stripe : Color.clear
+        ).overlay(alignment: .leading) {
+          if isSelected { Rectangle().fill(theme.blue).frame(width: 2) }
+        }.overlay(alignment: .bottom) { Rectangle().fill(theme.separator).frame(height: 1) }
+          .contentShape(Rectangle())
+      }.buttonStyle(.plain).focusEffectDisabled().help(rowHelp)
+        .simultaneousGesture(TapGesture(count: 2).onEnded { inspect(row) })
+        .accessibilityAddTraits(isSelected ? .isSelected : []).accessibilityLabel(
+          "\(row.name), PID \(row.id)"
+        ).accessibilityValue(accessibleValues)
+        .accessibilityAction(named: "Inspect") { inspect(row) }
+        .accessibilityActions {
+          if hierarchical && hasChildren {
+            Button(expanded ? "Collapse branch" : "Expand branch", action: toggleExpanded)
+          }
+          if hierarchical && parentID != nil { Button("Select parent", action: selectParent) }
+        }
+      if hierarchical && hasChildren {
+        Button(action: toggleExpanded) {
+          Image(systemName: expanded ? "chevron.down" : "chevron.right")
+            .font(.system(size: 9, weight: .semibold)).foregroundStyle(theme.secondary)
+            .frame(width: 20, height: 29).contentShape(Rectangle())
+        }.buttonStyle(MonitorSegmentButton(theme: theme, radius: 4))
+          .offset(x: layout.offset("name") + 13 + indentation)
+          .accessibilityLabel("\(expanded ? "Collapse" : "Expand") \(row.name)")
+          .accessibilityIdentifier("process-disclosure-\(row.id)")
+          .help(
+            "\(expanded ? "Collapse" : "Expand") branch. Option-click includes all descendants.")
+      }
+    }.frame(width: layout.total, height: 41)
+      .onHover { hovered = $0 }
+      .accessibilityElement(children: .contain)
+      .contextMenu {
         Button("Inspect") { inspect(row) }
         if let diagnose {
           Button("Process diagnostics…") { diagnose(row, false) }
           Button("Open in tool window") { diagnose(row, true) }
+        }
+        if hierarchical {
+          Divider()
+          Button("Expand subtree", action: expandBranch).disabled(!hasChildren)
+          Button("Collapse subtree", action: collapseBranch).disabled(!hasChildren)
+          Button("Select parent", action: selectParent).disabled(parentID == nil)
+          Divider()
         }
         Button("Copy selected rows", action: copy)
         Button("Quit selected processes…", role: .destructive, action: stopSelection).disabled(
@@ -667,21 +752,30 @@ private struct ProcessTableRow: View, Equatable {
         }
         Button("Quit…", role: .destructive) { stop(row) }.disabled(
           row.uid != getuid() || row.id <= 1 || row.id == getpid())
-      }.accessibilityAddTraits(isSelected ? .isSelected : []).accessibilityLabel(
-        "\(row.name), PID \(row.id)"
-      ).accessibilityValue(accessibleValues)
-      .accessibilityAction(named: "Inspect") {
-        inspect(row)
       }
   }
   private var rowHelp: String {
-    [row.name, row.executableName.map { "Executable: " + $0 }, row.gpuAvailability]
-      .compactMap { $0 }.joined(separator: "\n")
+    [
+      row.name, row.executableName.map { "Executable: " + $0 },
+      hierarchical ? parentDescription : nil,
+      isContext ? "Ancestor shown for context; does not match the current filter." : nil,
+      row.gpuAvailability,
+    ]
+    .compactMap { $0 }.joined(separator: "\n")
+  }
+  private var parentDescription: String {
+    if let parentID {
+      return "Parent: \(parentName ?? "Process") (PID \(parentID)). Level \(depth + 1)."
+    }
+    return "Root process. Level 1."
   }
   private var accessibleValues: String {
-    columns.map { column in
+    let values = columns.map { column in
       column.title + ": " + ProcessValues.text(row, key: column.id, metric: metric)
     }.joined(separator: ", ")
+    guard hierarchical else { return values }
+    return parentDescription + (hasChildren ? (expanded ? " Expanded. " : " Collapsed. ") : " ")
+      + (isContext ? "Ancestor context. " : "") + values
   }
   private var metricCells: some View {
     Canvas { context, size in

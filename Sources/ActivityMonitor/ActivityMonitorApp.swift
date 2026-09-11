@@ -15,6 +15,7 @@ import SwiftUI
       .windowStyle(.hiddenTitleBar)
       .commands {
         CommandGroup(replacing: .newItem) {}
+        ProcessViewCommands()
         CommandMenu("Layout") {
           Button("Compact Window") { resize(width: 520, height: 760) }.keyboardShortcut(
             "1", modifiers: [.command, .option])

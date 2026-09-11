@@ -97,39 +97,3 @@ func processClipboard(_ rows: [ProcessRow], keys: [String], metric: Metric) -> S
       }.joined(separator: "\t")
     }).joined(separator: "\n")
 }
-
-struct ProcessTreeEntry: Identifiable {
-  var row: ProcessRow
-  var depth: Int
-  var hasChildren: Bool
-  var id: Int32 { row.id }
-}
-
-enum ProcessHierarchy {
-  /// Preserve the active sort among siblings; malformed or recycled parent chains
-  /// cannot hide a process or recurse forever.
-  static func entries(_ rows: [ProcessRow], collapsed: Set<Int32>) -> [ProcessTreeEntry] {
-    let ids = Set(rows.map(\.id))
-    let children = Dictionary(
-      grouping: rows.filter { $0.parent != $0.id && ids.contains($0.parent) }, by: \.parent)
-    let roots = rows.filter { $0.parent == $0.id || !ids.contains($0.parent) }
-    var visited = Set<Int32>()
-    var output: [ProcessTreeEntry] = []
-    func append(_ root: ProcessRow, depth: Int, visible: Bool) {
-      var pending: [(ProcessRow, Int, Bool)] = [(root, depth, visible)]
-      while let (row, level, shown) = pending.popLast() {
-        guard visited.insert(row.id).inserted else { continue }
-        let descendants = children[row.id] ?? []
-        if shown {
-          output.append(ProcessTreeEntry(row: row, depth: level, hasChildren: !descendants.isEmpty))
-        }
-        for child in descendants.reversed() {
-          pending.append((child, level + 1, shown && !collapsed.contains(row.id)))
-        }
-      }
-    }
-    for root in roots { append(root, depth: 0, visible: true) }
-    for row in rows where !visited.contains(row.id) { append(row, depth: 0, visible: true) }
-    return output
-  }
-}
