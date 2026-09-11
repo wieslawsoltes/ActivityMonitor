@@ -51,6 +51,34 @@ final class ProcessColumnsTests: XCTestCase {
     XCTAssertEqual(ProcessDisplayName.resolve(executable: "helper", application: ""), "helper")
     XCTAssertEqual(ProcessDisplayName.resolve(executable: "helper", application: nil), "helper")
   }
+  func testProcessSearchPreservesLocalizedUnicodeAndFieldMatching() {
+    let names = [
+      "Café", "Cafe\u{301}", "Straße", "İstanbul", "Istanbul", "ＡＢＣ", "Σίσυφος", "🔍 Helper", "中文",
+      "Renderer) 9", "",
+    ]
+    let searches = [
+      "", "CAFÉ", "cafe\u{301}", "cafe", "STRASSE", "istanbul", "ı", "abc", "ΣΊ", "🔍", "中",
+      "renderer) 9", "000", "absent",
+    ]
+    for (index, name) in names.enumerated() {
+      var row = PerformanceFixture.rows(1)[0]
+      row.name = name
+      row.executableName = index.isMultiple(of: 2) ? nil : names[(index + 1) % names.count]
+      row.user = names[(index + 2) % names.count]
+      for text in searches {
+        let expected =
+          text.isEmpty || row.name.localizedCaseInsensitiveContains(text)
+          || (row.executableName?.localizedCaseInsensitiveContains(text) ?? false)
+          || row.user.localizedCaseInsensitiveContains(text) || String(row.id).contains(text)
+        let query = ProcessQuery(
+          metric: .cpu, query: text, filter: "All processes", sort: "primary", descending: true)
+        XCTAssertEqual(query.matches(row), expected, "\(name): \(text)")
+        XCTAssertEqual(query.apply([row]).count, expected ? 1 : 0)
+        XCTAssertEqual(
+          ProcessTreeSnapshot.build([row], query: query).matchingIDs.contains(row.id), expected)
+      }
+    }
+  }
   func testPacketParserUsesHeaderOrderAndPreservesMissingCounters() {
     let data = parseProcessNetwork(
       ",packets_in,bytes_in,packets_out,bytes_out,\nname,with.dots.42,3,4096,7,8192,\n")
@@ -104,6 +132,7 @@ final class ProcessColumnsTests: XCTestCase {
     var a = try XCTUnwrap(Collector().collect().processes.first { $0.id == getpid() })
     a.id = 1
     a.cpu = 90
+    a.cpuSampleAvailable = true
     a.name = "Windows 11"
     a.executableName = "prl_vm_app"
     a.details.ports = 2

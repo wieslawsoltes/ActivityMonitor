@@ -37,6 +37,12 @@ struct ProcessColumnWidths {
 }
 
 struct ProcessColumnLayout: Equatable {
+  private struct HeaderKey: Hashable {
+    let id: String
+    let title: String
+    let metric: Metric
+  }
+  private static let preferredWidths = BoundedCache<HeaderKey, CGFloat>(capacity: 256)
   let name: CGFloat
   let widths: [String: CGFloat]
   let total: CGFloat
@@ -102,6 +108,12 @@ struct ProcessColumnLayout: Equatable {
   func offset(_ key: String) -> CGFloat { order.prefix { $0 != key }.reduce(0) { $0 + width($1) } }
 
   static func preferred(_ column: ProcessColumn, metric: Metric) -> CGFloat {
+    preferredWidths.value(for: HeaderKey(id: column.id, title: column.title, metric: metric)) {
+      measurePreferred(column, metric: metric)
+    }
+  }
+
+  private static func measurePreferred(_ column: ProcessColumn, metric: Metric) -> CGFloat {
     let key = ProcessColumns.canonical(column.id, metric: metric)
     let base: CGFloat
     switch key {
@@ -121,7 +133,10 @@ struct ProcessColumnLayout: Equatable {
     return max(base, ceil(title) + 32)
   }
 
-  static func fitted(key: String, title: String, metric: Metric, rows: [ProcessRow]) -> CGFloat {
+  static func fitted(
+    key: String, title: String, metric: Metric, rows: [ProcessRow],
+    usage: [Int32: ProcessSubtreeUsage]? = nil
+  ) -> CGFloat {
     let header =
       (title as NSString).size(withAttributes: [
         .font: NSFont.systemFont(ofSize: 10, weight: .semibold)
@@ -131,7 +146,10 @@ struct ProcessColumnLayout: Equatable {
       ? NSFont.systemFont(ofSize: 12)
       : NSFont.monospacedDigitSystemFont(ofSize: key == "user" ? 11 : 12, weight: .medium)
     let content = rows.reduce(CGFloat(0)) { width, row in
-      let text = key == "name" ? row.name : ProcessValues.text(row, key: key, metric: metric)
+      let text =
+        key == "name"
+        ? row.name
+        : ProcessValues.text(row, key: key, metric: metric, usage: usage?[row.id])
       return max(width, (text as NSString).size(withAttributes: [.font: font]).width)
     }
     return ProcessColumnWidths.clamp(

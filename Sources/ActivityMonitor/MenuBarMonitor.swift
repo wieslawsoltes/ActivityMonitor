@@ -46,14 +46,17 @@ struct MenuBarMonitor: View {
         }
         .buttonStyle(MonitorIconButton(theme: theme)).help(
           monitor.paused ? "Resume monitoring" : "Pause monitoring")
-        SettingsMenuButton(size: 28) {
+        SettingsMenuButton(
+          size: 28, accessibilityLabel: "Monitor settings", toolTip: "Monitor settings"
+        ) {
           let menu = NSMenu()
           menu.addAppearance($appearance)
           menu.addUpdateInterval($monitor.interval)
           menu.addItem(.separator())
-          menu.addAction("Quit Activity Monitor") { NSApp.terminate(nil) }
+          menu.addSettingsAction("Quit Activity Monitor") { NSApp.terminate(nil) }
           return menu
-        }.frame(width: 28, height: 28)
+        }
+        .frame(width: 28, height: 28)
       }.padding(16)
       MetricSwitcher(metric: $presentation.metric, theme: theme, compact: true).padding(
         .horizontal, 14)

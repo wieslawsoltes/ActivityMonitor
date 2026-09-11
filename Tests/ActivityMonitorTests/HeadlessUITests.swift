@@ -8,6 +8,8 @@ struct ProcessTableHarness: View {
   let rows: [ProcessRow]
   var metric: Metric = .cpu
   var dark = false
+  @State var mode = ProcessViewMode.list
+  @StateObject var tree = ProcessTreePresentation()
   @State private var query = ""
   @State private var filter = "All processes"
   @State private var selection: Int32?
@@ -19,7 +21,8 @@ struct ProcessTableHarness: View {
   var body: some View {
     MonitorProcessTable(
       rows: rows, metric: metric, theme: .init(dark: dark), query: $query,
-      filter: $filter, selection: $selection, selectedIDs: $selected, inspector: $inspector,
+      filter: $filter, mode: $mode, tree: tree, sourceRows: rows,
+      selection: $selection, selectedIDs: $selected, inspector: $inspector,
       sort: $sort, descending: $descending, inspect: { _ in }, stop: { _ in },
       stopMany: { _ in }, searchFocus: $search)
   }

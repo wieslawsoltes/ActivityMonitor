@@ -1,7 +1,15 @@
-Activity Monitor 1.6.1 makes process diagnostic tables easier to read in compact windows.
+Activity Monitor 1.6.2 adds a Process Explorer-style process tree and keeps settings menus stable during live telemetry updates.
+
+### New
+
+- Switch the main process workspace between List and Tree views, with ancestry-aware filtering, branch navigation and persistent expansion state.
+- Collapse or expand individual branches, reveal a selected process in its hierarchy and export the visible tree with parent-process context.
+- Inspect complete or partial CPU and memory usage for a process subtree, with explicit accounting scope in the usage panels.
 
 ### Improved
 
+- The process tree is built and filtered efficiently during telemetry refreshes, with performance coverage for large process sets.
+- Settings menus remain open while live telemetry updates, so changing an interval or display option does not dismiss the menu.
 - Threads, open files, connections, memory maps, mapped images, Mach ports and fileports show a focused set of columns by default.
 - Default columns fit the available window width, with more space for names, paths and endpoints.
 - Right-click a header to show additional fields, fit columns to the window or restore the default layout.
@@ -14,4 +22,4 @@ Download the universal DMG or app ZIP for Apple silicon and Intel on macOS 14 or
 
 [Process diagnostics guide](https://github.com/wieslawsoltes/ActivityMonitor/blob/main/docs/diagnostics/README.md) · [Installation guide](https://github.com/wieslawsoltes/ActivityMonitor#installation)
 
-[Changes since 1.6.0](https://github.com/wieslawsoltes/ActivityMonitor/compare/v1.6.0...v1.6.1)
+[Changes since 1.6.1](https://github.com/wieslawsoltes/ActivityMonitor/compare/v1.6.1...v1.6.2)

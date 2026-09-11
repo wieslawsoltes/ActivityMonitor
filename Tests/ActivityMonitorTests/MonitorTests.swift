@@ -129,12 +129,14 @@ final class MonitorTests: XCTestCase {
     a.id = 100
     a.name = "Alpha"
     a.cpu = 10
+    a.cpuSampleAvailable = true
     a.memory = 300
     a.isApp = true
     var b = own
     b.id = 101
     b.name = "Beta"
     b.cpu = 20
+    b.cpuSampleAvailable = true
     b.memory = 100
     b.isApp = false
     var query = ProcessQuery(

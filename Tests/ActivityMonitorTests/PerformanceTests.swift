@@ -102,6 +102,19 @@ final class PerformanceTests: XCTestCase {
         XCTAssertEqual(result.count, 1000)
       }
     }
+    benchmark("tree.build_filter.all_views.1000") {
+      for metric in Metric.allCases {
+        var query = ProcessQuery(
+          metric: metric, query: "", filter: "All processes",
+          sort: metric == .network ? "received" : "primary", descending: true)
+        let tree = ProcessTreeSnapshot.build(rows, query: query)
+        XCTAssertEqual(tree.visible(collapsed: []).count, 1000)
+        query.query = "Renderer) 9"
+        let filtered = ProcessTreeSnapshot.build(rows, query: query)
+        XCTAssertEqual(filtered.matchingIDs.count, 111)
+        XCTAssertEqual(filtered.entries.count, 112)
+      }
+    }
     benchmark("format.all_columns.1000") {
       for row in rows {
         for column in ProcessColumns.available(.cpu) {
@@ -128,6 +141,15 @@ final class PerformanceTests: XCTestCase {
       render(
         ContentView().environmentObject(monitor).environmentObject(MonitorNavigation()),
         size: CGSize(width: 1440, height: 900))
+    }
+    let suite = "ActivityMonitor.Performance.Tree.\(UUID())"
+    let defaults = UserDefaults(suiteName: suite)!
+    defaults.set("tree", forKey: "processViewMode.v1")
+    defer { defaults.removePersistentDomain(forName: suite) }
+    benchmark("tree.workspace.1000", iterations: 3) {
+      render(
+        ContentView().environmentObject(monitor).environmentObject(MonitorNavigation())
+          .defaultAppStorage(defaults), size: CGSize(width: 1440, height: 900))
     }
     benchmark("gallery.1000", iterations: 3) {
       render(

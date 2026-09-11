@@ -25,11 +25,18 @@ enum CPUAccounting {
   static func processPercent(current: AMProcess, previous: AMProcess?, elapsed: TimeInterval)
     -> Double
   {
+    sampledProcessPercent(current: current, previous: previous, elapsed: elapsed) ?? 0
+  }
+
+  static func sampledProcessPercent(
+    current: AMProcess, previous: AMProcess?, elapsed: TimeInterval
+  ) -> Double? {
     guard let previous, current.accessible != 0, previous.accessible != 0,
       current.start == previous.start, current.cpu >= previous.cpu,
       elapsed.isFinite, elapsed > 0
-    else { return 0 }
-    return Double(current.cpu - previous.cpu) / 1e9 / elapsed * 100
+    else { return nil }
+    let value = Double(current.cpu - previous.cpu) / 1e9 / elapsed * 100
+    return value.isFinite ? value : nil
   }
 
   static func systemPercent(current: AMSystem, previous: AMSystem) -> (

@@ -37,7 +37,7 @@ enum ProcessMetricDrawing {
 
   static func draw(
     row: ProcessRow, columns: [ProcessColumn], layout: ProcessColumnLayout,
-    metric: Metric, theme: MonitorTheme, in context: CGContext
+    metric: Metric, theme: MonitorTheme, usage: ProcessSubtreeUsage? = nil, in context: CGContext
   ) {
     var x: CGFloat = 0
     for key in layout.order {
@@ -48,7 +48,7 @@ enum ProcessMetricDrawing {
       let highlighted = key == "primary" && [.cpu, .memory, .gpu].contains(metric)
       let user = key == "user"
       let text = ProcessCellText.truncate(
-        ProcessValues.text(row, key: key, metric: metric),
+        ProcessValues.text(row, key: key, metric: metric, usage: usage),
         width: width - (highlighted ? 34 : 20),
         font: .monospacedDigitSystemFont(
           ofSize: user ? 11 : 12, weight: primary ? .medium : .regular))

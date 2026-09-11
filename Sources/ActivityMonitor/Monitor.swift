@@ -57,6 +57,9 @@ struct ProcessRow: Identifiable, Codable, Equatable {
   var details = ProcessDetails()
   var executableName: String? = nil
   var gpuWaiting = false
+  // Optional for compatibility with older saved snapshots and supplied process rows.
+  var cpuSampleAvailable: Bool? = nil
+  var memoryUsesResidentFallback: Bool? = nil
   var gpuAvailability: String {
     gpuPercent != nil
       ? "GPU counters across all reporting devices"
@@ -77,6 +80,9 @@ struct Snapshot {
   var cpuCores = CPUCoreSample()
 }
 func bytes(_ value: UInt64) -> String {
+  if value > UInt64(Int64.max) {
+    return String(format: "%.1f EiB", Double(value) / 1_152_921_504_606_846_976)
+  }
   // Formatters are expensive to construct and must not be shared across threads.
   let key = "ActivityMonitor.byteFormatter"
   let formatter: ByteCountFormatter
@@ -90,6 +96,8 @@ func bytes(_ value: UInt64) -> String {
   return formatter.string(fromByteCount: Int64(clamping: value))
 }
 func duration(_ seconds: Double) -> String {
+  guard seconds.isFinite else { return "—" }
+  guard seconds < Double(Int.max) else { return String(format: "%.0f s", seconds) }
   let s = Int(max(0, seconds))
   return String(format: "%d:%02d:%02d", s / 3600, s / 60 % 60, s % 60)
 }
@@ -123,7 +131,8 @@ final class Collector: @unchecked Sendable {
     let rows = buffer.prefix(Int(count)).map { p -> ProcessRow in
       next[p.pid] = p
       let previous = old[p.pid]
-      let cpu = CPUAccounting.processPercent(current: p, previous: previous, elapsed: elapsed)
+      let cpu = CPUAccounting.sampledProcessPercent(
+        current: p, previous: previous, elapsed: elapsed)
       var n = p.name
       let name = withUnsafePointer(to: &n) {
         $0.withMemoryRebound(to: CChar.self, capacity: 1024) { String(cString: $0) }
@@ -137,14 +146,17 @@ final class Collector: @unchecked Sendable {
       }
       let networkCounters = network[p.pid]
       var row = ProcessRow(
-        id: p.pid, parent: p.ppid, uid: p.uid, start: p.start, name: name, user: user, cpu: cpu,
-        cpuTime: Double(p.cpu) / 1e9, memory: p.footprint > 0 ? p.footprint : p.resident,
+        id: p.pid, parent: p.ppid, uid: p.uid, start: p.start, name: name, user: user,
+        cpu: cpu ?? 0,
+        cpuTime: Double(p.cpu) / 1e9, memory: p.ioAccessible != 0 ? p.footprint : p.resident,
         resident: p.resident, threads: p.threads, read: p.read, written: p.written, isApp: false,
         accessible: p.accessible != 0, kind: p.translated != 0 ? "Intel" : nativeKind,
         networkReceived: networkCounters?.received, networkSent: networkCounters?.sent,
         ioAccessible: p.ioAccessible != 0, gpuPercent: gpuProcesses[p.pid]?.percent,
         gpuTime: gpuProcesses[p.pid]?.seconds, gpuWaiting: gpuProcesses[p.pid]?.waiting ?? false)
       row.executableName = name
+      row.cpuSampleAvailable = cpu != nil
+      row.memoryUsesResidentFallback = p.ioAccessible == 0 && p.accessible != 0
       row.details = detailsByPID[p.pid] ?? ProcessDetails()
       row.details.packetsIn = networkCounters?.packetsIn
       row.details.packetsOut = networkCounters?.packetsOut
@@ -320,13 +332,20 @@ final class Collector: @unchecked Sendable {
     }
     if kill(row.id, force ? SIGKILL : SIGTERM) != 0 { error = String(cString: strerror(errno)) }
   }
-  func exportGPU(_ rows: [ProcessRow]) {
+  func exportGPU(_ rows: [ProcessRow], usage: [Int32: ProcessSubtreeUsage]? = nil) {
     // Freeze every field together before the save panel can run another sampling turn.
-    let snapshot = GPUExportSnapshot(
+    var snapshot = GPUExportSnapshot(
       capturedAt: lastUpdate, selectedDevice: gpuDevice?.id,
       devices: gpuDevices,
       history: Dictionary(
         uniqueKeysWithValues: gpuHistories.map { (String($0.key), $0.value) }), processes: rows)
+    if let usage {
+      snapshot.subtreeUsage = Dictionary(
+        uniqueKeysWithValues: rows.compactMap { row in
+          usage[row.id].map { (String(row.id), ProcessUsageExport($0)) }
+        })
+      snapshot.subtreeScope = ProcessSubtreeUsage.scopeHelp
+    }
     let panel = NSSavePanel()
     panel.nameFieldStringValue = "Activity-Monitor-GPU.json"
     panel.allowedContentTypes = [.json]
@@ -339,25 +358,26 @@ final class Collector: @unchecked Sendable {
       } catch { self.error = error.localizedDescription }
     }
   }
-  func exportJSON(_ rows: [ProcessRow]) {
+  func exportJSON(_ rows: [ProcessRow], usage: [Int32: ProcessSubtreeUsage]? = nil) {
     let panel = NSSavePanel()
     panel.nameFieldStringValue = "Activity-Monitor.json"
     panel.allowedContentTypes = [.json]
     if panel.runModal() == .OK, let url = panel.url {
       do {
-        let encoder = JSONEncoder()
-        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
-        try encoder.encode(rows).write(to: url, options: .atomic)
+        try processJSON(rows, usage: usage).write(to: url, options: .atomic)
       } catch { self.error = error.localizedDescription }
     }
   }
 
-  func export(_ rows: [ProcessRow]) {
+  func export(
+    _ rows: [ProcessRow], includeHierarchy: Bool = false,
+    usage: [Int32: ProcessSubtreeUsage]? = nil
+  ) {
     let panel = NSSavePanel()
     panel.nameFieldStringValue = "Activity-Monitor.csv"
     panel.allowedContentTypes = [.commaSeparatedText]
     if panel.runModal() == .OK, let url = panel.url {
-      let csv = processCSV(rows)
+      let csv = processCSV(rows, includeHierarchy: includeHierarchy, usage: usage)
       do { try csv.write(to: url, atomically: true, encoding: .utf8) } catch {
         self.error = error.localizedDescription
       }
@@ -373,21 +393,47 @@ func processStillMatches(_ row: ProcessRow) -> Bool {
     && check.pbi_uid == row.uid
 }
 
-func processCSV(_ rows: [ProcessRow]) -> String {
-  let header =
-    "Name,PID,User,CPU %,CPU seconds,Memory bytes,Threads,Bytes read,Bytes written,Network bytes received,Network bytes sent,GPU %,Observed GPU seconds\n"
+func processCSV(
+  _ rows: [ProcessRow], includeHierarchy: Bool = false,
+  usage: [Int32: ProcessSubtreeUsage]? = nil
+) -> String {
+  var header =
+    "Name,PID,User,CPU %,CPU seconds,Memory bytes,Threads,Bytes read,Bytes written,Network bytes received,Network bytes sent,GPU %,Observed GPU seconds"
+  if includeHierarchy || usage != nil { header += ",Parent PID" }
+  if usage != nil {
+    header += ",Subtree processes,Subtree resident fallback processes"
+    for metric in ProcessUsageMetric.allCases {
+      let title = "Subtree " + metric.exportTitle
+      header += ",\(title),\(title) reporting processes,\(title) status"
+    }
+  }
   let lines: [String] = rows.map { p in
-    let cells: [String] = [
+    var cells: [String] = [
       csvCell(p.name), String(p.id), csvCell(p.user),
-      p.accessible ? String(format: "%.2f", p.cpu) : "", p.accessible ? String(p.cpuTime) : "",
+      p.accessible && p.cpuSampleAvailable != false ? String(format: "%.2f", p.cpu) : "",
+      p.accessible ? String(p.cpuTime) : "",
       p.accessible ? String(p.memory) : "", p.accessible ? String(p.threads) : "",
       p.ioAccessible ? String(p.read) : "", p.ioAccessible ? String(p.written) : "",
       p.networkReceived.map(String.init) ?? "", p.networkSent.map(String.init) ?? "",
       p.gpuPercent.map { String(format: "%.4f", $0) } ?? "", p.gpuTime.map { String($0) } ?? "",
     ]
+    if includeHierarchy || usage != nil { cells.append(String(p.parent)) }
+    if let usage {
+      let total = usage[p.id]
+      cells.append(total.map { String($0.processCount) } ?? "")
+      cells.append(total.map { String($0.residentFallbackCount) } ?? "")
+      for metric in ProcessUsageMetric.allCases {
+        let counter = total.map {
+          ProcessUsageExportCounter($0[metric], processCount: $0.processCount, metric: metric)
+        }
+        cells.append(counter?.value?.csvValue ?? "")
+        cells.append(counter.map { String($0.reportedProcesses) } ?? "")
+        cells.append(counter?.status ?? "unavailable")
+      }
+    }
     return cells.joined(separator: ",")
   }
-  return header + lines.joined(separator: "\n")
+  return header + "\n" + lines.joined(separator: "\n")
 }
 
 var nativeKind: String {
@@ -454,4 +500,6 @@ struct GPUExportSnapshot: Codable {
   var processScope = "All reporting GPU devices; filtered process list"
   var processRateUnit = "Driver-reported GPU seconds per elapsed second, multiplied by 100"
   var processTimeScope = "Valid sampled driver-time deltas observed during this session"
+  var subtreeUsage: [String: ProcessUsageExport]? = nil
+  var subtreeScope: String? = nil
 }

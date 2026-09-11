@@ -81,55 +81,29 @@ struct ProcessListSelection {
   }
 }
 
-func processClipboard(_ rows: [ProcessRow], keys: [String], metric: Metric) -> String {
+func processClipboard(
+  _ rows: [ProcessRow], keys: [String], metric: Metric,
+  usage: [Int32: ProcessSubtreeUsage]? = nil
+) -> String {
   let titles = Dictionary(
     uniqueKeysWithValues: ProcessColumns.available(metric).map { ($0.id, $0.title) })
   func clean(_ text: String) -> String {
     text.replacingOccurrences(of: "\t", with: " ").replacingOccurrences(of: "\n", with: " ")
       .replacingOccurrences(of: "\r", with: " ")
   }
-  let header = keys.map { $0 == "name" ? "Process name" : titles[$0] ?? $0 }.joined(separator: "\t")
+  let header = keys.map { key in
+    let title = key == "name" ? "Process name" : titles[key] ?? key
+    return usage != nil && ProcessUsageMetric.resolve(key, metric: metric) != nil
+      ? "Σ " + title : title
+  }.joined(separator: "\t")
   return
     ([header]
     + rows.map { row in
       keys.map { key in
-        clean(key == "name" ? row.name : ProcessValues.text(row, key: key, metric: metric))
+        clean(
+          key == "name"
+            ? row.name
+            : ProcessValues.text(row, key: key, metric: metric, usage: usage?[row.id]))
       }.joined(separator: "\t")
     }).joined(separator: "\n")
-}
-
-struct ProcessTreeEntry: Identifiable {
-  var row: ProcessRow
-  var depth: Int
-  var hasChildren: Bool
-  var id: Int32 { row.id }
-}
-
-enum ProcessHierarchy {
-  /// Preserve the active sort among siblings; malformed or recycled parent chains
-  /// cannot hide a process or recurse forever.
-  static func entries(_ rows: [ProcessRow], collapsed: Set<Int32>) -> [ProcessTreeEntry] {
-    let ids = Set(rows.map(\.id))
-    let children = Dictionary(
-      grouping: rows.filter { $0.parent != $0.id && ids.contains($0.parent) }, by: \.parent)
-    let roots = rows.filter { $0.parent == $0.id || !ids.contains($0.parent) }
-    var visited = Set<Int32>()
-    var output: [ProcessTreeEntry] = []
-    func append(_ root: ProcessRow, depth: Int, visible: Bool) {
-      var pending: [(ProcessRow, Int, Bool)] = [(root, depth, visible)]
-      while let (row, level, shown) = pending.popLast() {
-        guard visited.insert(row.id).inserted else { continue }
-        let descendants = children[row.id] ?? []
-        if shown {
-          output.append(ProcessTreeEntry(row: row, depth: level, hasChildren: !descendants.isEmpty))
-        }
-        for child in descendants.reversed() {
-          pending.append((child, level + 1, shown && !collapsed.contains(row.id)))
-        }
-      }
-    }
-    for root in roots { append(root, depth: 0, visible: true) }
-    for row in rows where !visited.contains(row.id) { append(row, depth: 0, visible: true) }
-    return output
-  }
 }

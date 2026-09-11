@@ -16,6 +16,12 @@
     "query.all_views.1000": {
       "median_ms": 5
     },
+    "tree.build_filter.all_views.1000": {
+      "median_ms": 40
+    },
+    "tree.workspace.1000": {
+      "median_ms": 800
+    },
     "format.all_columns.1000": {
       "median_ms": 75
     },
