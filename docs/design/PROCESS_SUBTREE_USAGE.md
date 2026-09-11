@@ -35,3 +35,5 @@ Sort roots and siblings by the displayed total, with missing totals last. Copy u
 ## Verification
 
 Use independently calculated multi-level fixtures for every additive metric, including a parent whose own usage is low but whose descendants are busy. Check unavailable parents/children, legitimate zero, rate warm-up, integer precision and overflow, filtering, collapse, reparenting, exits, PID reuse, cycles and deep chains. Check sorting, copy/export and accessibility against the same displayed totals. Retain the existing performance limits, run correctness and release gates, and inspect the updated native app and screenshots.
+
+The September 11, 2026 native verification exported an unfiltered, paused 633-process snapshot. An independent Python traversal recomputed all 12,027 totals from raw own-process records, checking member counts, reported counts, unavailable/partial/complete status and resident fallback counts. Every value matched (integers exactly; floating-point sums within 1e-12 relative tolerance). Native checks also confirmed stable totals after search, collapse and compact resizing, and individual values in List mode.

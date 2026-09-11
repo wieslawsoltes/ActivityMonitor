@@ -1,8 +1,8 @@
 # List and Tree process views
 
-Captured from the running PR 20 app on September 11, 2026. These are real macOS process snapshots, paused with the same **Google Chrome** search for comparison.
+Captured from the running PR 20 app on September 11, 2026. These are real macOS process snapshots, paused at 19:41:31 CEST with the same **Google Chrome** search for comparison.
 
-List shows the matching processes in column order. Tree keeps children under their parents and includes the muted **kernel_task** and **launchd** ancestor rows. The count reports the 41 search matches; those two context rows are additional.
+List shows the matching processes in column order. Tree keeps children under their parents and includes the muted **kernel_task** and **launchd** ancestor rows. The count reports the 49 search matches; those two context rows are additional. Tree columns marked **Σ** include every current descendant, including hidden ones. Chrome shows 14.2% CPU and 11.18 GB across its 49-process subtree; List shows its own 4.2% CPU and 647.3 MB. The **≥** prefix marks partial totals. Memory is summed process accounting and can overlap across shared mappings; it is not unique physical RAM.
 
 | List | Tree |
 | --- | --- |
