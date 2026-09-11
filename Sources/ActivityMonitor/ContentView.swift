@@ -298,34 +298,8 @@ struct ContentView: View {
               Image(systemName: monitor.paused ? "play" : "pause")
             }
             .buttonStyle(MonitorIconButton(theme: theme)).help(monitor.paused ? "Resume" : "Pause")
-            Menu {
-              Button("Export visible processes…") {
-                monitor.export(
-                  visibleProcesses, includeHierarchy: processViewMode == .tree, usage: visibleUsage)
-              }
-              Button("Export JSON snapshot…") {
-                monitor.exportJSON(visibleProcesses, usage: visibleUsage)
-              }
-              Button("Export GPU snapshot & history…") {
-                monitor.exportGPU(visibleProcesses, usage: visibleUsage)
-              }
-              Divider()
-              Picker("Appearance", selection: $appearance) {
-                ForEach(["Light", "Dark", "System"], id: \.self) { Text($0).tag($0) }
-              }
-              Toggle("Show monitor in menu bar", isOn: $showMenuBar)
-              Picker("Update interval", selection: $monitor.interval) {
-                Text("Every second").tag(1.0)
-                Text("Every 2 seconds").tag(2.0)
-                Text("Every 5 seconds").tag(5.0)
-              }
-              Divider()
-              Button("All views & themes") { showGallery = true }
-              Button("Keyboard shortcuts & data notes") { showHelp = true }
-            } label: {
-              Image(systemName: "ellipsis").frame(width: 32, height: 32)
-            }
-            .menuStyle(.borderlessButton).menuIndicator(.hidden).fixedSize().help("More")
+            SettingsMenuButton { settingsMenu(compact: true) }
+              .frame(width: 32, height: 32)
           }.padding(.horizontal, layout.gutter)
           if layout.standard {
             MetricSwitcher(metric: Binding(get: { metric }, set: selectMetric), theme: theme)
@@ -400,31 +374,37 @@ struct ContentView: View {
             appearanceButton("Dark", "moon")
             appearanceButton("System", "desktopcomputer")
           }.padding(3).overlay(RoundedRectangle(cornerRadius: 9).stroke(theme.border, lineWidth: 1))
-          Menu {
-            Toggle("Show monitor in menu bar", isOn: $showMenuBar)
-            Button("Export JSON snapshot…") {
-              monitor.exportJSON(visibleProcesses, usage: visibleUsage)
-            }
-            Button("Export GPU snapshot & history…") {
-              monitor.exportGPU(visibleProcesses, usage: visibleUsage)
-            }
-            Divider()
-            Picker("Update interval", selection: $monitor.interval) {
-              Text("Every second").tag(1.0)
-              Text("Every 2 seconds").tag(2.0)
-              Text("Every 5 seconds").tag(5.0)
-            }
-            Button("Keyboard shortcuts & data notes") { showHelp = true }
-          } label: {
-            Image(systemName: "ellipsis").font(.system(size: 15)).foregroundStyle(theme.secondary)
-              .frame(width: 32, height: 32)
-          }.menuStyle(.borderlessButton).menuIndicator(.hidden).fixedSize()
+          SettingsMenuButton { settingsMenu(compact: false) }
+            .frame(width: 32, height: 32)
         }
       }.padding(.horizontal, 23)
 
     }.frame(height: 78).background(theme.toolbar).overlay(alignment: .bottom) {
       Rectangle().fill(theme.border).frame(height: 1)
     }
+  }
+  private func settingsMenu(compact: Bool) -> NSMenu {
+    let menu = NSMenu()
+    if compact {
+      menu.addSettingsAction("Export visible processes…") {
+        monitor.export(
+          visibleProcesses, includeHierarchy: processViewMode == .tree, usage: visibleUsage)
+      }
+    }
+    menu.addSettingsAction("Export JSON snapshot…") {
+      monitor.exportJSON(visibleProcesses, usage: visibleUsage)
+    }
+    menu.addSettingsAction("Export GPU snapshot & history…") {
+      monitor.exportGPU(visibleProcesses, usage: visibleUsage)
+    }
+    menu.addItem(.separator())
+    if compact { menu.addAppearance($appearance) }
+    menu.addSettingsToggle("Show monitor in menu bar", selection: $showMenuBar)
+    menu.addUpdateInterval($monitor.interval)
+    if compact { menu.addItem(.separator()) }
+    if compact { menu.addSettingsAction("All views & themes") { showGallery = true } }
+    menu.addSettingsAction("Keyboard shortcuts & data notes") { showHelp = true }
+    return menu
   }
   func appearanceButton(_ name: String, _ icon: String) -> some View {
     Button {
