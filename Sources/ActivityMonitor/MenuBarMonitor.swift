@@ -97,7 +97,8 @@ struct MenuBarMonitor: View {
               Rectangle().fill(theme.separator).frame(height: 1)
             }
             if top.isEmpty {
-              Text("Waiting for processes").foregroundStyle(theme.secondary).padding()
+              Text(metric == .gpu ? "No active GPU processes reported" : "Waiting for processes")
+                .foregroundStyle(theme.secondary).padding()
             }
             if metric == .gpu {
               Text("Process counters cover all reporting GPUs.").font(.system(size: 10))
@@ -146,7 +147,7 @@ struct MenuBarMonitor: View {
       ProcessQuery(
         metric: metric, query: "", filter: metric == .energy ? "Applications" : "All processes",
         sort: metric == .network ? "received" : "primary", descending: true
-      ).apply(rows, limit: 5))
+      ).apply(metric == .gpu ? rows.filter { ($0.gpuPercent ?? 0) > 0 } : rows, limit: 5))
   }
   private func show(_ pid: Int32?) {
     navigation.request = MonitorDestination(metric: metric, range: range, pid: pid)

@@ -20,6 +20,17 @@ private struct UpdatingSettingsHarness: View {
 }
 
 @MainActor final class MenuInteractionTests: XCTestCase {
+  func testStatusPopoverCanJoinFullScreenWithoutActivatingMainWindow() {
+    _ = NSApplication.shared
+    let panel = NSPanel(contentRect: .zero, styleMask: .borderless, backing: .buffered, defer: false)
+    panel.isReleasedWhenClosed = false
+    defer { panel.close() }
+    MonitorMenuBarController.configurePopoverWindow(panel)
+    XCTAssertTrue(panel.collectionBehavior.contains(.canJoinAllSpaces))
+    XCTAssertTrue(panel.collectionBehavior.contains(.fullScreenAuxiliary))
+    XCTAssertTrue(panel.styleMask.contains(.nonactivatingPanel))
+    XCTAssertEqual(panel.level, .statusBar)
+  }
   func testSettingsButtonSurvivesTelemetryRefreshesAndKeepsMenuSourceStable() async throws {
     _ = NSApplication.shared
     let monitor = Monitor(startAutomatically: false)

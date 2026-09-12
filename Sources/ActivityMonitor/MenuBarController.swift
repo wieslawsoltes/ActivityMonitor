@@ -62,6 +62,18 @@ struct TrayLifecycle: View {
     outsideClicks.stop()
     popover.contentViewController = nil
   }
+  func popoverWillShow(_ notification: Notification) {
+    guard let window = popover.contentViewController?.view.window else { return }
+    Self.configurePopoverWindow(window)
+  }
+
+  static func configurePopoverWindow(_ window: NSWindow) {
+    // Configure before ordering: a regular app's main window can be in another
+    // Space. The status popover must join the clicked menu bar's full-screen Space.
+    window.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .transient, .ignoresCycle]
+    window.styleMask.insert(.nonactivatingPanel)
+    window.level = .statusBar
+  }
   func setEnabled(_ enabled: Bool) {
     if enabled && item == nil {
       let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)

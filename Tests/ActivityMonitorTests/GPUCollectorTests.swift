@@ -4,6 +4,26 @@ import XCTest
 @testable import ActivityMonitor
 
 final class GPUCollectorTests: XCTestCase {
+  func testIntelContextCountersProduceProcessRatesWithoutDoubleCounting() throws {
+    func parse(_ ns: UInt64) throws -> GPUClientSample {
+      try XCTUnwrap(GPURegistryParser.client(device: 1, id: 2, properties: [
+        "IOUserClientCreator": "pid 42, Intel Metal workload",
+        "accumulatedGPUTime": ns,
+        "AppUsage": [["accumulatedGPUTime": ns]],
+      ]))
+    }
+    var tracker = GPUProcessTracker()
+    let initial = try parse(5_000_000_000)
+    XCTAssertEqual(initial.nanoseconds, 5_000_000_000)
+    _ = tracker.update(snapshot(1, [initial]), identities: [42: 100])
+    let result = tracker.update(snapshot(3, [try parse(6_000_000_000)]), identities: [42: 100])
+    XCTAssertEqual(result[42]?.percent, 50)
+    XCTAssertEqual(result[42]?.seconds, 1)
+    let direct = GPURegistryParser.client(device: 1, id: 3, properties: [
+      "IOUserClientCreator": "pid 42, Intel", "accumulatedGPUTime": 0,
+    ])
+    XCTAssertEqual(direct?.nanoseconds, 0)
+  }
   func client(_ ns: UInt64, pid: Int32 = 42, device: UInt64 = 1, id: UInt64 = 10, count: Int = 1)
     -> GPUClientSample
   {

@@ -27,7 +27,21 @@ The program runs 100 compute submissions and prints its PID, total driver time, 
 
 - Live M3 Pro device identity matches Metal registry ID `4294968698`. Device, renderer, tiler and memory counters are present. Real WindowServer GPU counters remain visible even though ordinary CPU/memory access is restricted.
 - The test suite covers optional values, monotonic rates, warmup, counter and queue changes, PID reuse, duplicates, device separation/disconnection, graph gaps, sorting, exports and alternate device-utilization keys.
-- Metal ancestor matching and alternate `GPU Activity(%)` parsing are covered by synthetic fixtures. A physical Intel Mac or eGPU was not available for runtime validation; unsupported driver counters are shown as unavailable.
+- Metal ancestor matching and alternate `GPU Activity(%)` parsing are covered by synthetic fixtures. Intel hardware was subsequently validated below; a physical eGPU remains untested. Unsupported driver counters are shown as unavailable.
 - The sampling path uses IOKit directly. A 30-second observation of the initial release build with GPU selected measured 4.4968% process CPU, with RSS moving from 129,216 to 130,208 KiB. Sampling interval: two seconds. The earlier version's idle observations were 4.53–4.70%; these are separate runs, not a controlled comparative benchmark.
 
 [Measurement definitions](METRICS.md#gpu) describe partial client coverage, session time and the distinction between device utilization and process rates.
+
+## Intel regression validation — September 12, 2026
+
+macOS 26.6.2 (25G83), Intel Core i5, Intel Iris Plus Graphics. This driver publishes
+`accumulatedGPUTime` directly on accelerator contexts, without an `AppUsage` array.
+The collector now accepts that cumulative counter and prefers it over an array if
+both are present, avoiding duplicate accounting.
+
+The existing controlled Metal workload completed 100 submissions with 8.689530683
+seconds of counter growth, compared with 8.689530683099292 seconds from Metal
+command-buffer timestamps. Total driver time was 8.77853485 seconds. This verifies
+live counter availability and nanosecond units on this Intel driver; it is not a
+claim that all drivers measure identical intervals. No administrator privileges
+were used. Regression tests cover direct zero counters, rates and duplicate fields.

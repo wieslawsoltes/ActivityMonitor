@@ -75,9 +75,18 @@ enum GPURegistryParser {
   static func client(device: UInt64, id: UInt64, properties: [String: Any]) -> GPUClientSample? {
     guard let creator = properties["IOUserClientCreator"] as? String, creator.hasPrefix("pid "),
       let pidText = creator.dropFirst(4).split(separator: ",", maxSplits: 1).first,
-      let pid = Int32(pidText), pid > 0,
-      let usage = properties["AppUsage"] as? [[String: Any]], !usage.isEmpty
+      let pid = Int32(pidText), pid > 0
     else { return nil }
+    // Intel publishes the cumulative nanoseconds on the context itself. Prefer
+    // that total when present; adding AppUsage would count the same work twice.
+    if let total = unsigned(properties["accumulatedGPUTime"]) {
+      return GPUClientSample(
+        key: GPUClientKey(device: device, client: id), pid: pid,
+        nanoseconds: total, counterCount: 1, counters: [total])
+    }
+    guard let usage = properties["AppUsage"] as? [[String: Any]], !usage.isEmpty else {
+      return nil
+    }
     var total: UInt64 = 0
     var counters: [UInt64] = []
     for entry in usage {
