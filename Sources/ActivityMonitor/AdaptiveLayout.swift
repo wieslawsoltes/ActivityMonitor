@@ -147,11 +147,6 @@ struct MetricSwitcher: View {
   let theme: MonitorTheme
   var compact = false
   var controlHeight: CGFloat = 34
-  var inNativeToolbar = false
-  var drawsContainer: Bool {
-    if #available(macOS 26, *), inNativeToolbar { return false }
-    return true
-  }
   var body: some View {
     HStack(spacing: 3) {
       ForEach(Metric.allCases) { item in
@@ -171,14 +166,8 @@ struct MetricSwitcher: View {
           )
           .help("\(item.rawValue) · ⌘\(Metric.allCases.firstIndex(of: item)! + 1)")
       }
-    }.padding(4).background {
-      // Tahoe supplies the toolbar group's glass outline. Do not draw a
-      // second container inside it; standalone and older-system uses retain it.
-      if drawsContainer {
-        RoundedRectangle(cornerRadius: 11).fill(theme.recessed)
-          .overlay(RoundedRectangle(cornerRadius: 11).stroke(theme.separator, lineWidth: 1))
-      }
-    }
+    }.padding(4).background(theme.recessed, in: RoundedRectangle(cornerRadius: 11))
+      .overlay(RoundedRectangle(cornerRadius: 11).stroke(theme.separator, lineWidth: 1))
       .accessibilityElement(children: .contain)
   }
 }

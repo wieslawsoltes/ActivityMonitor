@@ -93,6 +93,9 @@ struct ContentView: View {
               workspace(layout, viewportHeight: viewport.size.height)
             }
           }
+          // Keep scrolling content inside the workspace's safe-area viewport;
+          // the transparent title bar is reserved for native toolbar controls.
+          .clipped()
         } else {
           workspace(layout)
         }
@@ -128,8 +131,7 @@ struct ContentView: View {
         }
       }
       .toolbar { monitorToolbar(layout) }
-      .toolbarBackground(theme.toolbar, for: .windowToolbar)
-      .toolbarBackground(.visible, for: .windowToolbar)
+      .modifier(MonitorWindowBackground(theme: theme))
       .animation(reduceMotion ? nil : .easeInOut(duration: 0.18), value: inspector)
       .sheet(isPresented: $showGallery) {
         DesignGallery(
@@ -281,79 +283,60 @@ struct ContentView: View {
       }
     }
     ToolbarItem(placement: .principal) {
-      MetricSwitcher(
-        metric: Binding(get: { metric }, set: selectMetric), theme: theme,
-        compact: layout.width < 860, controlHeight: 28, inNativeToolbar: true
-      )
-      .frame(width: layout.width < 860 ? 210 : nil)
-      .fixedSize(horizontal: true, vertical: true)
+      ToolbarMetricPicker(
+        metric: Binding(get: { metric }, set: selectMetric), compact: layout.width < 860)
     }
-    ToolbarItem(placement: .primaryAction) {
-      HStack(spacing: 4) {
-        Button { monitor.paused.toggle() } label: {
-          Image(systemName: monitor.paused ? "play" : "pause")
+    ToolbarItemGroup(placement: .primaryAction) {
+      Button(monitor.paused ? "Resume monitoring" : "Pause monitoring",
+             systemImage: monitor.paused ? "play" : "pause") {
+        monitor.paused.toggle()
+      }
+      .help(monitor.paused ? "Resume" : "Pause")
+      if layout.width >= 1350 {
+        Button("Export visible processes", systemImage: "square.and.arrow.up") {
+          monitor.export(
+            visibleProcesses, includeHierarchy: processViewMode == .tree, usage: visibleUsage)
         }
-        .buttonStyle(MonitorIconButton(theme: theme))
-        .help(monitor.paused ? "Resume" : "Pause")
-        .accessibilityLabel(monitor.paused ? "Resume monitoring" : "Pause monitoring")
-        if layout.width >= 1350 {
-          Button {
-            monitor.export(
-              visibleProcesses, includeHierarchy: processViewMode == .tree, usage: visibleUsage)
-          } label: {
-            Image(systemName: "square.and.arrow.up")
-          }.buttonStyle(MonitorIconButton(theme: theme)).help("Export visible processes")
-          Button { showGallery = true } label: {
-            Image(systemName: "square.grid.2x2")
-          }.buttonStyle(MonitorIconButton(theme: theme)).help("All views & themes")
-          HStack(spacing: 2) {
-            appearanceButton("Light", "sun.max")
-            appearanceButton("Dark", "moon")
-            appearanceButton("System", "desktopcomputer")
-          }
-        }
-        SettingsMenuButton { settingsMenu(compact: layout.width < 1350) }
-          .frame(width: 32, height: 32)
-      }.fixedSize().accessibilityElement(children: .contain)
+        .help("Export visible processes")
+        Button("All views & themes", systemImage: "square.grid.2x2") { showGallery = true }
+          .help("All views & themes")
+      }
+      Menu("More", systemImage: "ellipsis") {
+        settingsMenu
+      }
+      .menuIndicator(.hidden)
+      .help("More")
+      .accessibilityIdentifier("monitor-settings")
     }
   }
-  private func settingsMenu(compact: Bool) -> NSMenu {
-    let menu = NSMenu()
-    if compact {
-      menu.addSettingsAction("Export visible processes…") {
-        monitor.export(
-          visibleProcesses, includeHierarchy: processViewMode == .tree, usage: visibleUsage)
-      }
+  @ViewBuilder private var settingsMenu: some View {
+    Button("Export visible processes…") {
+      monitor.export(
+        visibleProcesses, includeHierarchy: processViewMode == .tree, usage: visibleUsage)
     }
-    menu.addSettingsAction("Export JSON snapshot…") {
+    Button("Export JSON snapshot…") {
       monitor.exportJSON(visibleProcesses, usage: visibleUsage)
     }
-    menu.addSettingsAction("Export GPU snapshot & history…") {
+    Button("Export GPU snapshot & history…") {
       monitor.exportGPU(visibleProcesses, usage: visibleUsage)
     }
-    menu.addItem(.separator())
-    if compact { menu.addAppearance($appearance) }
-    menu.addSettingsToggle("Show monitor in menu bar", selection: $showMenuBar)
-    menu.addUpdateInterval($monitor.interval)
-    if compact { menu.addItem(.separator()) }
-    if compact { menu.addSettingsAction("All views & themes") { showGallery = true } }
-    menu.addItem(.separator())
-    AppUpdater.shared.addMenuItems(to: menu)
-    menu.addItem(.separator())
-    menu.addSettingsAction("Keyboard shortcuts & data notes") { showHelp = true }
-    return menu
-  }
-  func appearanceButton(_ name: String, _ icon: String) -> some View {
-    Button {
-      appearance = name
-    } label: {
-      Image(systemName: icon).font(.system(size: 13)).foregroundStyle(
-        appearance == name ? theme.blue : theme.tertiary
-      ).frame(width: 28, height: 26)
-    }.buttonStyle(MonitorSegmentButton(theme: theme, active: appearance == name, radius: 6)).help(
-      "\(name) appearance"
-    ).accessibilityLabel("\(name) appearance")
-      .accessibilityAddTraits(appearance == name ? .isSelected : [])
+    Divider()
+    Picker("Appearance", selection: $appearance) {
+      Text("Light").tag("Light")
+      Text("Dark").tag("Dark")
+      Text("System").tag("System")
+    }
+    Toggle("Show monitor in menu bar", isOn: $showMenuBar)
+    Picker("Update interval", selection: $monitor.interval) {
+      Text("Every second").tag(1.0)
+      Text("Every 2 seconds").tag(2.0)
+      Text("Every 5 seconds").tag(5.0)
+    }
+    Divider()
+    Button("All views & themes") { showGallery = true }
+    UpdateCommands()
+    Divider()
+    Button("Keyboard shortcuts & data notes") { showHelp = true }
   }
   /// One control row leaves chart and process space unchanged across overview modes.
   func overviewControls(_ layout: MonitorLayout) -> some View {
