@@ -26,7 +26,8 @@ struct ContentView: View {
   @State var showHelp = false
   @State var showGallery = false
   @State private var diagnosticSession: ProcessDiagnosticSession?
-  @FocusState var searchFocused: Bool
+  @State var searchExpanded = false
+  @State var searchFocused = false
   @FocusState var tableFocused: Bool
   @AppStorage("showThreads") var showThreads = true
   @AppStorage("showUser") var showUser = true
@@ -227,7 +228,7 @@ struct ContentView: View {
       }
       .background {
         Group {
-          Button("") { searchFocused = true }.keyboardShortcut("k")
+          Button("") { searchExpanded = true }.keyboardShortcut("k")
           ForEach(Array(Metric.allCases.enumerated()), id: \.offset) { index, item in
             Button("") { selectMetric(item) }.keyboardShortcut(
               KeyEquivalent(Character(String(index + 1))))
@@ -260,7 +261,7 @@ struct ContentView: View {
             selection = p.id
             inspector = true
           }, stop: { stopTargets = [$0] }, stopMany: { stopTargets = $0 },
-          searchFocus: $searchFocused, diagnose: openDiagnostics)
+          searchFocus: $searchFocused, searchExpanded: $searchExpanded, diagnose: openDiagnostics)
         if inspector && layout.inlineInspector {
           inspectorPanel.frame(width: layout.inspectorWidth)
         }
@@ -282,13 +283,16 @@ struct ContentView: View {
           .accessibilityLabel("Activity Monitor, \(Self.machineName), \(architectureLabel)")
       }
     }
-    ToolbarItem(placement: .principal) {
-      ToolbarMetricPicker(
-        metric: Binding(get: { metric }, set: selectMetric), compact: layout.width < 860)
+    if #available(macOS 26, *) {
+      metricToolbarItem(layout).sharedBackgroundVisibility(.hidden)
+    } else {
+      metricToolbarItem(layout)
     }
     ToolbarItemGroup(placement: .primaryAction) {
-      Button(monitor.paused ? "Resume monitoring" : "Pause monitoring",
-             systemImage: monitor.paused ? "play" : "pause") {
+      Button(
+        monitor.paused ? "Resume monitoring" : "Pause monitoring",
+        systemImage: monitor.paused ? "play" : "pause"
+      ) {
         monitor.paused.toggle()
       }
       .help(monitor.paused ? "Resume" : "Pause")
@@ -307,6 +311,13 @@ struct ContentView: View {
       .menuIndicator(.hidden)
       .help("More")
       .accessibilityIdentifier("monitor-settings")
+    }
+  }
+  private func metricToolbarItem(_ layout: MonitorLayout) -> some ToolbarContent {
+    ToolbarItem(placement: .principal) {
+      ToolbarMetricPicker(
+        metric: Binding(get: { metric }, set: selectMetric), theme: theme,
+        compact: layout.width < 860)
     }
   }
   @ViewBuilder private var settingsMenu: some View {

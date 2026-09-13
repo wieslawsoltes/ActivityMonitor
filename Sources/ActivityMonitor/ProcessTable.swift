@@ -23,7 +23,8 @@ struct MonitorProcessTable: View {
   let inspect: (ProcessRow) -> Void
   let stop: (ProcessRow) -> Void
   let stopMany: ([ProcessRow]) -> Void
-  let searchFocus: FocusState<Bool>.Binding
+  let searchFocus: Binding<Bool>
+  @Binding var searchExpanded: Bool
   var diagnose: ((ProcessRow, Bool) -> Void)? = nil
   @AppStorage("showThreads") var showThreads = true
   @AppStorage("showUser") var showUser = true
@@ -92,13 +93,16 @@ struct MonitorProcessTable: View {
       let visibleEntries = entries
       let chosenRows = selectedRows
       let canStopChosen = canStop
-      let toolbarHeight: CGFloat = g.size.width >= 900 ? 61 : 76
+      let toolbarHeight: CGFloat = 61
       VStack(spacing: 0) {
-        if g.size.width >= 900 {
-          toolbar.frame(height: toolbarHeight)
-        } else {
-          compactToolbar.frame(height: toolbarHeight)
+        Group {
+          if g.size.width >= 900 {
+            toolbar
+          } else {
+            compactToolbar(width: g.size.width)
+          }
         }
+        .frame(height: toolbarHeight)
         Rectangle().fill(theme.separator).frame(height: 1)
         let fallback =
           g.size.width
@@ -282,29 +286,7 @@ struct MonitorProcessTable: View {
         }.font(.system(size: 11)).foregroundStyle(theme.secondary).frame(
           width: 128, alignment: .trailing)
       }.menuStyle(.borderlessButton).menuIndicator(.hidden).fixedSize()
-      HStack(spacing: 8) {
-        Image(systemName: "magnifyingglass").font(.system(size: 11)).foregroundStyle(theme.tertiary)
-        TextField("Search processes", text: $query).textFieldStyle(.plain).font(.system(size: 11))
-          .foregroundStyle(theme.text).focused(searchFocus)
-        if query.isEmpty {
-          Text("⌘ K").font(.system(size: 9)).foregroundStyle(theme.tertiary).padding(.horizontal, 4)
-            .padding(.vertical, 1).overlay(
-              RoundedRectangle(cornerRadius: 3).stroke(theme.border, lineWidth: 1))
-        } else {
-          Button {
-            query = ""
-          } label: {
-            Image(systemName: "xmark.circle.fill").font(.system(size: 10)).foregroundStyle(
-              theme.tertiary)
-          }.buttonStyle(.plain)
-        }
-      }.padding(.horizontal, 10).frame(width: 230, height: 31).background(
-        theme.subtle, in: RoundedRectangle(cornerRadius: 7)
-      ).overlay(
-        RoundedRectangle(cornerRadius: 7).stroke(
-          searchFocus.wrappedValue ? theme.blue.opacity(0.65) : theme.border, lineWidth: 1)
-      ).padding(
-        .leading, 8)
+      searchField.frame(width: 230).padding(.leading, 8)
       Rectangle().fill(theme.border).frame(width: 1, height: 18).padding(.horizontal, 3)
       Button {
         if !selectedRows.isEmpty { stopMany(selectedRows) }
@@ -391,79 +373,93 @@ struct MonitorProcessTable: View {
     Text("— means the metric is unavailable.")
     if hierarchy { Text(ProcessSubtreeUsage.menuScopeHelp) }
   }
-  var compactToolbar: some View {
-    VStack(spacing: 8) {
-      HStack(spacing: 8) {
-        Text(selectedIDs.count > 1 ? "\(selectedIDs.count) selected" : processCountLabel)
-          .font(.system(size: 12, weight: .semibold))
-          .lineLimit(1).help(processCountHelp)
-        viewModePicker(compact: true)
+  // Match the macOS search interaction: collapse when idle and space is scarce,
+  // expand in place on activation, and keep an active query visible across resizes.
+  func compactToolbar(width: CGFloat) -> some View {
+    let narrow = width < 620
+    let searching = searchExpanded || searchFocus.wrappedValue || !query.isEmpty
+    return HStack(spacing: 8) {
+      if !narrow || !searching {
+        Text(
+          width < 440
+            ? (selectedIDs.count > 1 ? selectedIDs.count : rows.count).formatted()
+            : selectedIDs.count > 1 ? "\(selectedIDs.count) selected" : processCountLabel
+        )
+        .font(.system(size: 12, weight: .semibold))
+        .lineLimit(1).help(processCountHelp).layoutPriority(-1)
+        viewModePicker(compact: true).fixedSize()
+      }
+      if narrow && searching {
+        searchField.frame(minWidth: 100)
+      } else {
         Spacer(minLength: 0)
-        Menu {
-          Picker("Process filter", selection: $filter) {
-            ForEach(
-              ProcessQuery.filters, id: \.self
-            ) { Text($0).tag($0) }
-          }
-        } label: {
-          Image(systemName: "line.3.horizontal.decrease.circle")
-        }
-        .menuStyle(.borderlessButton).fixedSize().help("Filter: \(filter)")
-        Menu {
-          Button("Process name") {
-            sort = "name"
-            descending = false
-          }
-          ForEach(allColumns.filter { !unavailableColumn($0.id) }) { column in
-            Button(column.title) {
-              sort = column.id
-              descending = true
-            }
-          }
-          Divider()
-          Toggle("Descending", isOn: $descending)
-        } label: {
-          Image(systemName: "arrow.up.arrow.down")
-        }
-        .menuStyle(.borderlessButton).fixedSize().help("Sort processes")
-        Menu {
-          columnMenu
-        } label: {
-          Image(systemName: "rectangle.split.3x1")
-        }
-        .menuStyle(.borderlessButton).fixedSize().help("Choose columns")
       }
-      HStack(spacing: 6) {
-        HStack(spacing: 6) {
-          Image(systemName: "magnifyingglass").foregroundStyle(theme.tertiary)
-          TextField("Search processes", text: $query).textFieldStyle(.plain).focused(searchFocus)
-          if !query.isEmpty {
-            Button {
-              query = ""
-            } label: {
-              Image(systemName: "xmark.circle.fill")
-            }.buttonStyle(.plain).help("Clear search")
-          }
-        }.font(.system(size: 11)).padding(.horizontal, 9).frame(height: 30)
-          .background(theme.subtle, in: RoundedRectangle(cornerRadius: 6))
-          .overlay(
-            RoundedRectangle(cornerRadius: 6).stroke(
-              searchFocus.wrappedValue ? theme.blue : theme.border, lineWidth: 1))
-        Button {
-          if !selectedRows.isEmpty { stopMany(selectedRows) }
-        } label: {
-          Image(systemName: "xmark.octagon")
+      Menu {
+        Picker("Process filter", selection: $filter) {
+          ForEach(ProcessQuery.filters, id: \.self) { Text($0).tag($0) }
         }
-        .buttonStyle(MonitorIconButton(theme: theme)).disabled(!canStop).help(
-          "Quit selected process")
-        Button {
-          inspector.toggle()
-        } label: {
-          Image(systemName: "info.circle")
-        }
-        .buttonStyle(MonitorIconButton(theme: theme, active: inspector)).help("Process details")
+      } label: {
+        Image(systemName: "line.3.horizontal.decrease.circle")
       }
-    }.padding(.horizontal, 14)
+      .menuStyle(.borderlessButton).menuIndicator(.hidden).fixedSize().help("Filter: \(filter)")
+      Menu {
+        Button("Process name") {
+          sort = "name"
+          descending = false
+        }
+        ForEach(allColumns.filter { !unavailableColumn($0.id) }) { column in
+          Button(column.title) {
+            sort = column.id
+            descending = true
+          }
+        }
+        Divider()
+        Toggle("Descending", isOn: $descending)
+      } label: {
+        Image(systemName: "arrow.up.arrow.down")
+      }
+      .menuStyle(.borderlessButton).menuIndicator(.hidden).fixedSize().help("Sort processes")
+      Menu {
+        columnMenu
+      } label: {
+        Image(systemName: "rectangle.split.3x1")
+      }
+      .menuStyle(.borderlessButton).menuIndicator(.hidden).fixedSize().help("Choose columns")
+      if !narrow {
+        searchField.frame(minWidth: 140, idealWidth: 180, maxWidth: 230)
+      } else if !searching {
+        Button {
+          searchExpanded = true
+        } label: {
+          Image(systemName: "magnifyingglass")
+        }
+        .buttonStyle(MonitorIconButton(theme: theme))
+        .help("Search processes · ⌘K").accessibilityLabel("Search processes")
+        .accessibilityIdentifier("process-search-button")
+      }
+      Button {
+        if !selectedRows.isEmpty { stopMany(selectedRows) }
+      } label: {
+        Image(systemName: "xmark.octagon")
+      }
+      .buttonStyle(MonitorIconButton(theme: theme)).disabled(!canStop)
+      .help("Quit selected process")
+      Button {
+        inspector.toggle()
+      } label: {
+        Image(systemName: "info.circle")
+      }
+      .buttonStyle(MonitorIconButton(theme: theme, active: inspector)).help("Process details")
+    }
+    .padding(.horizontal, 14)
+    .onChange(of: searchFocus.wrappedValue) {
+      if !searchFocus.wrappedValue { searchExpanded = false }
+    }
+  }
+  var searchField: some View {
+    ProcessSearchField(query: $query, presented: $searchExpanded) {
+      searchFocus.wrappedValue = $0
+    }.frame(height: 30)
   }
   var canStop: Bool {
     !selectedRows.isEmpty

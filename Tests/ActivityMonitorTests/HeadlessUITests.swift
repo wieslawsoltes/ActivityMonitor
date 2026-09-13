@@ -17,14 +17,15 @@ struct ProcessTableHarness: View {
   @State private var inspector = false
   @State private var sort = "primary"
   @State private var descending = true
-  @FocusState private var search: Bool
+  @State private var searchExpanded = false
+  @State private var search = false
   var body: some View {
     MonitorProcessTable(
       rows: rows, metric: metric, theme: .init(dark: dark), query: $query,
       filter: $filter, mode: $mode, tree: tree, sourceRows: rows,
       selection: $selection, selectedIDs: $selected, inspector: $inspector,
       sort: $sort, descending: $descending, inspect: { _ in }, stop: { _ in },
-      stopMany: { _ in }, searchFocus: $search)
+      stopMany: { _ in }, searchFocus: $search, searchExpanded: $searchExpanded)
   }
 }
 
@@ -57,7 +58,7 @@ struct UpdatingProcessTableHarness: View {
     let scale = CGFloat(image.pixelsWide) / width
     // Inside the first fully visible row, away from the toolbar, header and icons.
     var ink = 0
-    let top = width >= 900 ? 110 : 125
+    let top = 110
     for y in stride(from: top, to: top + 23, by: 2) {
       for x in stride(from: 55, to: min(280, Int(width * 0.32)), by: 3) {
         guard
@@ -112,6 +113,33 @@ struct UpdatingProcessTableHarness: View {
           }
         }
       }
+    }
+  }
+  func testSearchFitsInTheHeaderAtIntermediateWidths() async throws {
+    let suite = "ActivityMonitor.Headless.Search.\(UUID())"
+    let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+    defer { defaults.removePersistentDomain(forName: suite) }
+    for width: CGFloat in [620, 650, 720, 850, 900, 1200] {
+      let host = NSHostingView(
+        rootView:
+          ProcessTableHarness(rows: PerformanceFixture.rows(1000)).defaultAppStorage(defaults))
+      host.frame = CGRect(x: 0, y: 0, width: width, height: 600)
+      let window = NSWindow(
+        contentRect: host.frame, styleMask: .borderless,
+        backing: .buffered, defer: false)
+      window.isReleasedWhenClosed = false
+      window.contentView = host
+      defer {
+        window.contentView = nil
+        window.close()
+      }
+      try await settle(host)
+      let search = try XCTUnwrap(descendant(host, NSSearchField.self))
+      let frame = host.convert(search.bounds, from: search)
+      XCTAssertGreaterThanOrEqual(frame.width, 140)
+      XCTAssertGreaterThanOrEqual(frame.minX, 0)
+      XCTAssertLessThanOrEqual(frame.maxX, width)
+      XCTAssertLessThanOrEqual(frame.maxY, 61)
     }
   }
   func testFilteringAtBottomThroughEmptyResultsRendersAgain() async throws {
@@ -177,7 +205,7 @@ struct UpdatingProcessTableHarness: View {
       let reference = try bitmap(host)
       let scale = CGFloat(reference.pixelsWide) / 420
       let expected = try XCTUnwrap(
-        reference.colorAt(x: Int(20 * scale), y: Int(80 * scale))?.usingColorSpace(.sRGB))
+        reference.colorAt(x: Int(20 * scale), y: Int(65 * scale))?.usingColorSpace(.sRGB))
       scroll.contentView.scroll(
         to: CGPoint(x: document.bounds.width - scroll.contentView.bounds.width, y: 4007))
       scroll.reflectScrolledClipView(scroll.contentView)
@@ -186,7 +214,7 @@ struct UpdatingProcessTableHarness: View {
 
       for x in stride(from: 20, through: 380, by: 20) {
         let color = try XCTUnwrap(
-          image.colorAt(x: Int(CGFloat(x) * scale), y: Int(80 * scale))?.usingColorSpace(.sRGB))
+          image.colorAt(x: Int(CGFloat(x) * scale), y: Int(65 * scale))?.usingColorSpace(.sRGB))
         XCTAssertEqual(color.redComponent, expected.redComponent, accuracy: 0.02)
         XCTAssertEqual(color.greenComponent, expected.greenComponent, accuracy: 0.02)
         XCTAssertEqual(color.blueComponent, expected.blueComponent, accuracy: 0.02)

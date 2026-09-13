@@ -1,35 +1,17 @@
 import SwiftUI
 
-/// Let the system own segment geometry, selection, focus and toolbar material.
+/// Keep the familiar tab appearance while fitting the compact native title bar.
 struct ToolbarMetricPicker: View {
   @Binding var metric: Metric
+  let theme: MonitorTheme
   var compact = false
 
   var body: some View {
-    Picker("Metric", selection: $metric) {
-      ForEach(Metric.allCases) { item in
-        Group {
-          if compact {
-            Image(systemName: item.icon).accessibilityLabel(item.rawValue)
-          } else {
-            Text(item.rawValue)
-          }
-        }
-        .tag(item)
-        .accessibilityLabel(item.rawValue)
-        .help("\(item.rawValue) · ⌘\(Metric.allCases.firstIndex(of: item)! + 1)")
-        .accessibilityIdentifier("monitor-metric-\(item.rawValue)")
-      }
-    }
-    .pickerStyle(.segmented)
-    .controlSize(.regular)
-    .labelsHidden()
-    // Reserve a compact toolbar width and refresh the native picker's intrinsic
-    // size when switching between text and icons during a window resize.
-    .frame(width: compact ? 210 : nil)
-    .fixedSize()
-    .id(compact)
-    .accessibilityIdentifier("monitor-metric-picker")
+    MetricSwitcher(metric: $metric, theme: theme, compact: compact, controlHeight: 26)
+      .frame(width: compact ? 210 : nil)
+      .fixedSize()
+      .id(compact)
+      .accessibilityIdentifier("monitor-metric-picker")
   }
 }
 
