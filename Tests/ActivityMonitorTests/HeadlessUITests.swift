@@ -49,28 +49,43 @@ struct UpdatingProcessTableHarness: View {
     try await Task.sleep(for: .milliseconds(25))
     view.layoutSubtreeIfNeeded()
   }
-  private func bitmap(_ host: NSView) throws -> NSBitmapImageRep {
-    let image = try XCTUnwrap(host.bitmapImageRepForCachingDisplay(in: host.bounds))
+  private func bitmap(_ host: NSView, scale: CGFloat? = nil) throws -> NSBitmapImageRep {
+    let image: NSBitmapImageRep
+    if let scale {
+      image = try XCTUnwrap(
+        NSBitmapImageRep(
+          bitmapDataPlanes: nil,
+          pixelsWide: Int(host.bounds.width * scale), pixelsHigh: Int(host.bounds.height * scale),
+          bitsPerSample: 8, samplesPerPixel: 4, hasAlpha: true, isPlanar: false,
+          colorSpaceName: .deviceRGB, bytesPerRow: 0, bitsPerPixel: 0))
+      image.size = host.bounds.size
+    } else {
+      image = try XCTUnwrap(host.bitmapImageRepForCachingDisplay(in: host.bounds))
+    }
     host.cacheDisplay(in: host.bounds, to: image)
     return image
   }
   private func rowHasInk(_ image: NSBitmapImageRep, width: CGFloat, dark: Bool) -> Bool {
     let scale = CGFloat(image.pixelsWide) / width
     // Sample a complete row period below the header. At fractional scroll
-    // offsets, a shorter band can fall between text baselines.
+    // offsets, a shorter band can fall between text baselines. Sample every
+    // pixel: a sparse grid can miss thin, antialiased text on 1× displays.
     var ink = 0
     let top = 110
-    for y in stride(from: top, to: top + 41, by: 2) {
-      for x in stride(from: 55, to: min(280, Int(width * 0.32)), by: 3) {
+    for y in top..<(top + 41) {
+      for x in 55..<min(280, Int(width * 0.32)) {
         guard
           let color = image.colorAt(x: Int(CGFloat(x) * scale), y: Int(CGFloat(y) * scale))?
             .usingColorSpace(.sRGB)
         else { continue }
         let brightness = (color.redComponent + color.greenComponent + color.blueComponent) / 3
-        if dark ? brightness > 0.65 : brightness < 0.4 { ink += 1 }
+        if dark ? brightness > 0.65 : brightness < 0.4 {
+          ink += 1
+          if ink > 12 { return true }
+        }
       }
     }
-    return ink > 12
+    return false
   }
   func testEveryListRendersRowsAtTopMiddleAndBottomInBothThemes() async throws {
     let suite = "ActivityMonitor.Headless.\(UUID())"
@@ -93,7 +108,8 @@ struct UpdatingProcessTableHarness: View {
           window.contentView = host
           defer { window.close() }
           try await settle(host)
-          _ = try bitmap(host)
+          // Exercise non-Retina rendering on Retina developer machines too.
+          _ = try bitmap(host, scale: 1)
           try await settle(host)
           let anchor = try XCTUnwrap(descendant(host, ProcessTableViewport.Anchor.self))
           let scroll = try XCTUnwrap(anchor.enclosingScrollView)
@@ -105,7 +121,15 @@ struct UpdatingProcessTableHarness: View {
             scroll.contentView.scroll(to: CGPoint(x: 0, y: y))
             scroll.reflectScrolledClipView(scroll.contentView)
             try await settle(host)
-            let image = try bitmap(host)
+            let image = try bitmap(host, scale: 1)
+            if !rowHasInk(image, width: width, dark: dark) {
+              let directory = URL(fileURLWithPath: ".build/ci-tests/renders")
+              try FileManager.default.createDirectory(
+                at: directory, withIntermediateDirectories: true)
+              let name = "\(metric)-\(Int(width))-\(dark)-\(fraction)"
+              try image.representation(using: .png, properties: [:])?
+                .write(to: directory.appendingPathComponent("\(name).png"))
+            }
             XCTAssertTrue(
               rowHasInk(image, width: width, dark: dark),
               "Blank \(metric) \(dark) viewport at \(fraction), width \(width), clip \(scroll.contentView.bounds)"
