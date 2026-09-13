@@ -276,7 +276,7 @@ struct ContentView: View {
   }
   @ToolbarContentBuilder
   func monitorToolbar(_ layout: MonitorLayout) -> some ToolbarContent {
-    if layout.width >= 1100 {
+    if MonitorToolbarLayout(width: layout.width).showsBrand {
       ToolbarItem(placement: .navigation) {
         BrandMark(size: 24)
           .help("Activity Monitor · \(Self.machineName) · \(architectureLabel)")
@@ -288,36 +288,77 @@ struct ContentView: View {
     } else {
       metricToolbarItem(layout)
     }
-    ToolbarItemGroup(placement: .primaryAction) {
-      Button(
-        monitor.paused ? "Resume monitoring" : "Pause monitoring",
-        systemImage: monitor.paused ? "play" : "pause"
-      ) {
-        monitor.paused.toggle()
-      }
-      .help(monitor.paused ? "Resume" : "Pause")
-      if layout.width >= 1350 {
-        Button("Export visible processes", systemImage: "square.and.arrow.up") {
-          monitor.export(
-            visibleProcesses, includeHierarchy: processViewMode == .tree, usage: visibleUsage)
-        }
-        .help("Export visible processes")
-        Button("All views & themes", systemImage: "square.grid.2x2") { showGallery = true }
-          .help("All views & themes")
-      }
-      Menu("More", systemImage: "ellipsis") {
-        settingsMenu
-      }
-      .menuIndicator(.hidden)
-      .help("More")
-      .accessibilityIdentifier("monitor-settings")
+    if #available(macOS 26, *) {
+      actionToolbarItem(layout).sharedBackgroundVisibility(.hidden)
+    } else {
+      actionToolbarItem(layout)
     }
+  }
+  private func actionToolbarItem(_ layout: MonitorLayout) -> some ToolbarContent {
+    ToolbarItem(placement: .primaryAction) {
+      HStack(spacing: 4) {
+        Button {
+          monitor.paused.toggle()
+        } label: {
+          Image(systemName: monitor.paused ? "play" : "pause")
+        }
+        .buttonStyle(MonitorIconButton(theme: theme))
+        .help(monitor.paused ? "Resume" : "Pause")
+        .accessibilityLabel(monitor.paused ? "Resume monitoring" : "Pause monitoring")
+        if MonitorToolbarLayout(width: layout.width).showsExpandedActions {
+          Button {
+            monitor.export(
+              visibleProcesses, includeHierarchy: processViewMode == .tree, usage: visibleUsage)
+          } label: {
+            Image(systemName: "square.and.arrow.up")
+          }
+          .buttonStyle(MonitorIconButton(theme: theme)).help("Export visible processes")
+          Button {
+            showGallery = true
+          } label: {
+            Image(systemName: "square.grid.2x2")
+          }
+          .buttonStyle(MonitorIconButton(theme: theme)).help("All views & themes")
+          HStack(spacing: 2) {
+            appearanceButton("Light", "sun.max")
+            appearanceButton("Dark", "moon")
+            appearanceButton("System", "desktopcomputer")
+          }
+          .padding(3)
+          .background(theme.recessed, in: RoundedRectangle(cornerRadius: 9))
+          .overlay(RoundedRectangle(cornerRadius: 9).stroke(theme.separator, lineWidth: 1))
+        }
+        Menu {
+          settingsMenu
+        } label: {
+          Image(systemName: "ellipsis").font(.system(size: 14))
+            .foregroundStyle(theme.secondary).frame(width: 32, height: 32)
+        }
+        .menuStyle(.borderlessButton).menuIndicator(.hidden)
+        .help("More").accessibilityLabel("More")
+        .accessibilityIdentifier("monitor-settings")
+      }
+      .frame(height: 34).fixedSize()
+      .accessibilityElement(children: .contain)
+    }
+  }
+  private func appearanceButton(_ name: String, _ icon: String) -> some View {
+    Button {
+      appearance = name
+    } label: {
+      Image(systemName: icon).font(.system(size: 13))
+        .foregroundStyle(appearance == name ? theme.blue : theme.tertiary)
+        .frame(width: 28, height: 26)
+    }
+    .buttonStyle(MonitorSegmentButton(theme: theme, active: appearance == name, radius: 6))
+    .help("\(name) appearance").accessibilityLabel("\(name) appearance")
+    .accessibilityAddTraits(appearance == name ? .isSelected : [])
   }
   private func metricToolbarItem(_ layout: MonitorLayout) -> some ToolbarContent {
     ToolbarItem(placement: .principal) {
       ToolbarMetricPicker(
         metric: Binding(get: { metric }, set: selectMetric), theme: theme,
-        compact: layout.width < 860)
+        compact: !MonitorToolbarLayout(width: layout.width).showsLabels)
     }
   }
   @ViewBuilder private var settingsMenu: some View {

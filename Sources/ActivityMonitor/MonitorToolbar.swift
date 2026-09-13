@@ -1,3 +1,4 @@
+import AppKit
 import SwiftUI
 
 /// Keep the familiar tab appearance while fitting the compact native title bar.
@@ -29,5 +30,27 @@ struct MonitorWindowBackground: ViewModifier {
         .toolbarBackground(theme.window, for: .windowToolbar)
         .toolbarBackground(.visible, for: .windowToolbar)
     }
+  }
+}
+
+/// Budget the toolbar from the actual SwiftUI tab size and fixed-size actions.
+/// Labels take priority over the optional brand mark and expanded action group.
+@MainActor struct MonitorToolbarLayout {
+  let width: CGFloat
+  private static let labeledTabsWidth: CGFloat = {
+    let view = NSHostingView(
+      rootView:
+        MetricSwitcher(metric: .constant(.cpu), theme: .init(dark: false), controlHeight: 26))
+    return ceil(view.fittingSize.width)
+  }()
+  private let windowChrome: CGFloat = 128
+  private let compactActions: CGFloat = 68
+  private let expandedActions: CGFloat = 238
+  private let brand: CGFloat = 40
+
+  var showsLabels: Bool { width >= Self.labeledTabsWidth + windowChrome + compactActions }
+  var showsBrand: Bool { width >= Self.labeledTabsWidth + windowChrome + compactActions + brand }
+  var showsExpandedActions: Bool {
+    width >= Self.labeledTabsWidth + windowChrome + expandedActions + brand
   }
 }

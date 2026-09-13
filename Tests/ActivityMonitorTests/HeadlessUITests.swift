@@ -56,10 +56,11 @@ struct UpdatingProcessTableHarness: View {
   }
   private func rowHasInk(_ image: NSBitmapImageRep, width: CGFloat, dark: Bool) -> Bool {
     let scale = CGFloat(image.pixelsWide) / width
-    // Inside the first fully visible row, away from the toolbar, header and icons.
+    // Sample a complete row period below the header. At fractional scroll
+    // offsets, a shorter band can fall between text baselines.
     var ink = 0
     let top = 110
-    for y in stride(from: top, to: top + 23, by: 2) {
+    for y in stride(from: top, to: top + 41, by: 2) {
       for x in stride(from: 55, to: min(280, Int(width * 0.32)), by: 3) {
         guard
           let color = image.colorAt(x: Int(CGFloat(x) * scale), y: Int(CGFloat(y) * scale))?
@@ -107,7 +108,8 @@ struct UpdatingProcessTableHarness: View {
             let image = try bitmap(host)
             XCTAssertTrue(
               rowHasInk(image, width: width, dark: dark),
-              "Blank \(metric) \(dark) viewport at \(fraction)")
+              "Blank \(metric) \(dark) viewport at \(fraction), width \(width), clip \(scroll.contentView.bounds)"
+            )
             XCTAssertEqual(document.bounds.height, height, accuracy: 2)
             XCTAssertEqual(scroll.contentView.bounds.minY, y, accuracy: 2)
           }
