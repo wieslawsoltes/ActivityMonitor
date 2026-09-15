@@ -20,6 +20,7 @@ struct DesignGallery: View {
   let close: () -> Void
   @State private var previewRows: [ProcessRow] = []
   @State private var gpuRows: [ProcessRow] = []
+  @State private var aneRows: [ProcessRow] = []
   var body: some View {
     GeometryReader { geometry in
       let layout = GalleryLayout(width: geometry.size.width)
@@ -56,6 +57,9 @@ struct DesignGallery: View {
         ProcessQuery(
           metric: .gpu, query: "", filter: "All processes", sort: "primary", descending: true
         ).apply(rows, limit: 3))
+      aneRows = Array(ProcessQuery(
+        metric: .ane, query: "", filter: "ANE connections", sort: "primary", descending: true
+      ).apply(rows, limit: 3))
       previewRows = ProcessQuery(
         metric: .cpu, query: "", filter: "All processes",
         sort: "primary", descending: true
@@ -66,7 +70,7 @@ struct DesignGallery: View {
     VStack(alignment: .leading, spacing: 7) {
       Text("ACTIVITY MONITOR / DESIGN COLLECTION").font(.system(size: 9, weight: .semibold))
         .tracking(1.8).foregroundStyle(Color(hex: 0x4086f7))
-      Text("Six perspectives. Two appearances.").font(.system(size: 20, weight: .semibold))
+      Text("Seven perspectives. Two appearances.").font(.system(size: 20, weight: .semibold))
         .tracking(-0.8)
       Text("Live previews. Choose a view and appearance to open it.").font(.system(size: 12))
         .foregroundStyle(.secondary)
@@ -113,7 +117,7 @@ struct DesignGallery: View {
           .clipped().disabled(true).allowsHitTesting(false).accessibilityHidden(true)
           VStack(spacing: 0) {
             ForEach(
-              Array((metric == .gpu ? gpuRows : previewRows).enumerated()),
+              Array((metric == .gpu ? gpuRows : metric == .ane ? aneRows : previewRows).enumerated()),
               id: \.element.id
             ) { index, p in
               HStack {
@@ -121,7 +125,9 @@ struct DesignGallery: View {
                 Spacer()
                 Text(
                   metric == .gpu
-                    ? gpuPercent(p.gpuPercent) + "% GPU" : String(format: "%.1f%% CPU", p.cpu))
+                    ? gpuPercent(p.gpuPercent) + "% GPU"
+                    : metric == .ane ? "\(p.aneConnections ?? 0) ANE connections"
+                    : String(format: "%.1f%% CPU", p.cpu))
                 Text(p.accessible ? bytes(p.memory) : "—").frame(width: 58, alignment: .trailing)
               }.font(.system(size: 8)).foregroundStyle(theme.secondary).padding(7).background(
                 index % 2 == 0 ? theme.card : theme.subtle)

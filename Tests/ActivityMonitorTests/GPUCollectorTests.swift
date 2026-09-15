@@ -219,8 +219,8 @@ final class GPUCollectorTests: XCTestCase {
       query.descending = false
       XCTAssertEqual(query.apply([c, a, b]).map(\.id), [43, 44, 42])
     }
-    XCTAssertTrue(processCSV([a]).hasSuffix(",,"))
-    XCTAssertTrue(processCSV([b]).hasSuffix(",0.0000,0.0"))
+    XCTAssertTrue(processCSV([a]).hasSuffix(",,,"))
+    XCTAssertTrue(processCSV([b]).hasSuffix(",0.0000,0.0,"))
     let data = try JSONEncoder().encode([a, b, c])
     XCTAssertEqual(try JSONDecoder().decode([ProcessRow].self, from: data), [a, b, c])
     let gpu = GPUExportSnapshot(

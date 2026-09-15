@@ -97,12 +97,17 @@ struct MenuBarMonitor: View {
               Rectangle().fill(theme.separator).frame(height: 1)
             }
             if top.isEmpty {
-              Text(metric == .gpu ? "No active GPU processes reported" : "Waiting for processes")
+              Text(metric == .gpu ? "No active GPU processes reported"
+                   : metric == .ane ? "No direct ANE connections reported" : "Waiting for processes")
                 .foregroundStyle(theme.secondary).padding()
             }
             if metric == .gpu {
               Text("Process counters cover all reporting GPUs.").font(.system(size: 10))
                 .foregroundStyle(theme.secondary).padding(.top, 8)
+            }
+            if metric == .ane {
+              Text("Connections do not measure ANE execution or utilization.")
+                .font(.system(size: 10)).foregroundStyle(theme.secondary).padding(.top, 8)
             }
           }.padding(.horizontal, 4)
         }.padding(14)
@@ -128,6 +133,7 @@ struct MenuBarMonitor: View {
     case .cpu: return "% CPU"
     case .memory: return "Memory"
     case .gpu: return "% GPU"
+    case .ane: return "ANE connections"
     case .energy: return "CPU workload"
     case .disk: return "Bytes written"
     case .network: return "Bytes received"
@@ -138,6 +144,7 @@ struct MenuBarMonitor: View {
     case .cpu, .energy: return p.accessible ? String(format: "%.1f%%", p.cpu) : "—"
     case .memory: return p.accessible ? bytes(p.memory) : "—"
     case .gpu: return p.gpuPercent.map { String(format: "%.1f%%", $0) } ?? "—"
+    case .ane: return p.aneConnections.map(String.init) ?? "—"
     case .disk: return p.ioAccessible ? bytes(p.written) : "—"
     case .network: return p.networkReceived.map(bytes) ?? "—"
     }
@@ -147,7 +154,8 @@ struct MenuBarMonitor: View {
       ProcessQuery(
         metric: metric, query: "", filter: metric == .energy ? "Applications" : "All processes",
         sort: metric == .network ? "received" : "primary", descending: true
-      ).apply(metric == .gpu ? rows.filter { ($0.gpuPercent ?? 0) > 0 } : rows, limit: 5))
+      ).apply(metric == .gpu ? rows.filter { ($0.gpuPercent ?? 0) > 0 }
+               : metric == .ane ? rows.filter { ($0.aneConnections ?? 0) > 0 } : rows, limit: 5))
   }
   private func show(_ pid: Int32?) {
     navigation.request = MonitorDestination(metric: metric, range: range, pid: pid)

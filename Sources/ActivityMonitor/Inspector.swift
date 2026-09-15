@@ -47,6 +47,8 @@ struct MonitorInspector: View {
               detail("CPU time", p.accessible ? duration(p.cpuTime) : "—")
               detail("GPU usage", gpuPercent(p.gpuPercent) + (p.gpuPercent == nil ? "" : "%"))
               detail("Observed GPU time", gpuDuration(p.gpuTime))
+              detail("ANE connections", p.aneConnections.map(String.init) ?? "—")
+                .help("Open direct-path ANE driver clients visible for this PID; this is not execution or utilization.")
               Text(
                 p.gpuAvailability
                   + ". Observed time covers this session. Execution-time rates can exceed 100% when GPU work overlaps."

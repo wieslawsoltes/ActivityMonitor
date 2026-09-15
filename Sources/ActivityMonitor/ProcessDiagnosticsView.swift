@@ -19,6 +19,7 @@ enum ProcessActivityPresentation {
       case .cpu, .energy: values = [point.cpu]
       case .memory: values = [point.memory.map { Double($0) }]
       case .gpu: values = [point.gpu]
+      case .ane: values = [point.aneConnections.map(Double.init)]
       case .disk: values = [point.read, point.written.map { -$0 }]
       case .network: values = [point.received, point.sent.map { -$0 }]
       }
@@ -40,6 +41,7 @@ enum ProcessActivityPresentation {
     case .cpu, .energy: return p.accessible ? String(format: "%.1f%%", p.cpu) : "—"
     case .memory: return p.accessible ? bytes(p.memory) : "—"
     case .gpu: return p.gpuPercent.map { String(format: "%.1f%%", $0) } ?? "—"
+    case .ane: return p.aneConnections.map { "\($0) connections" } ?? "—"
     case .disk: return latest?.read.map { bytes(UInt64(max(0, $0))) + "/s" } ?? "—"
     case .network: return latest?.received.map { bytes(UInt64(max(0, $0))) + "/s" } ?? "—"
     }
@@ -55,6 +57,7 @@ enum ProcessActivityPresentation {
     case .disk: return ["read", "written"]
     case .network: return ["received", "sent", "packetsIn", "packetsOut"]
     case .gpu: return ["gpu", "gpuTime", "cpu", "memory"]
+    case .ane: return ["aneConnections", "cpu", "memory"]
     }
   }
   static func note(_ metric: Metric) -> String {
@@ -74,6 +77,8 @@ enum ProcessActivityPresentation {
     case .gpu:
       return
         "GPU execution rate can exceed 100% when work overlaps. Device memory is driver-reported across the visible GPUs; process graphics ledgers provide separate kernel accounting, not a complete Metal allocation inventory. Observed GPU time covers this app session."
+    case .ane:
+      return "Visible direct-path ANE connections are not ANE execution, time, utilization, or proof that other processes are not using the Neural Engine."
     }
   }
 }

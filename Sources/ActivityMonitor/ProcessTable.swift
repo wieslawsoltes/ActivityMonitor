@@ -565,6 +565,8 @@ struct MonitorProcessTable: View {
     case "gpu":
       return
         "Sort by GPU execution-time rate across all reporting devices; overlapping work can exceed 100%"
+    case "aneConnections":
+      return "Sort by visible open direct-path ANE clients; this is not execution or utilization."
     case "cpu": return "Sort by CPU execution-time rate. " + CPUAccounting.processHelp
     default: return "Sort by \(title)"
     }
@@ -785,7 +787,8 @@ private struct ProcessTableRow: View, Equatable {
       hierarchical ? parentDescription : nil,
       isContext ? "Ancestor shown for context; does not match the current filter." : nil,
       usageDescription,
-      row.gpuAvailability,
+      metric == .ane ? nil : row.gpuAvailability,
+      metric == .ane ? "ANE connections show visible direct-path clients, not execution time or utilization." : nil,
     ]
     .compactMap { $0 }.joined(separator: "\n")
   }
@@ -896,6 +899,7 @@ enum ProcessColumnPolicy {
     let priorities: [String]
     switch metric {
     case .gpu: priorities = ["gpuTime", "memory", "cpu", "kind", "user"]
+    case .ane: priorities = ["cpu", "memory", "kind", "user"]
     case .network: priorities = ["sent", "packetsIn", "packetsOut", "user"]
     case .disk: priorities = ["secondary", "user"]
     case .energy: priorities = ["time", "sleep", "nap", "user"]

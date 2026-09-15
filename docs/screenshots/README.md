@@ -20,6 +20,18 @@ Captured from the GPU feature build on September 9, 2026, with real M3 Pro syste
 | GPU | ![GPU light](gpu/gpu-light.jpg) | ![GPU dark](gpu/gpu-dark.jpg) |
 | GPU inspector | ![GPU inspector light](gpu/inspector-light.jpg) | ![GPU inspector dark](gpu/inspector-dark.jpg) |
 
+## ANE preview
+
+Captured from the ANE feature build on September 15, 2026 using real M3 Pro
+driver data. The chart tracks open direct-path connections, not ANE utilization.
+
+| Layout | Light | Dark |
+| --- | --- | --- |
+| Wide | ![ANE wide light](ane/ane-wide-light.jpg) | ![ANE wide dark](ane/ane-wide-dark.jpg) |
+| Compact | ![ANE compact light](ane/ane-compact-light.jpg) | ![ANE compact dark](ane/ane-compact-dark.jpg) |
+
+![ANE process-family connection totals in Tree view](ane/ane-tree-light.jpg)
+
 ## Search focus
 
 The focused search field has a blue outline that remains visible in either appearance.

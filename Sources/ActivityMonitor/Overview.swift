@@ -17,6 +17,9 @@ struct MonitorOverview: View {
     if metric == .gpu {
       GPUOverview(
         range: range, theme: theme, width: width, expanded: expanded, condensed: condensed)
+    } else if metric == .ane {
+      ANEOverview(
+        range: range, theme: theme, width: width, expanded: expanded, condensed: condensed)
     } else if metric == .cpu && cpuPresentation.individual {
       VStack(spacing: dense ? 10 : 14) {
         DesignCard(theme: theme, padding: dense ? 12 : 19) {
@@ -135,7 +138,7 @@ struct MonitorOverview: View {
   }
   @ViewBuilder var middleCard: some View {
     switch metric {
-    case .gpu: EmptyView()
+    case .gpu, .ane: EmptyView()
     case .cpu:
       VStack(alignment: .leading, spacing: 0) {
         title("Usage breakdown")
@@ -233,7 +236,7 @@ struct MonitorOverview: View {
   }
   @ViewBuilder var lastCard: some View {
     switch metric {
-    case .gpu: EmptyView()
+    case .gpu, .ane: EmptyView()
     case .cpu:
       VStack(alignment: .leading, spacing: dense ? 4 : 10) {
         HStack {

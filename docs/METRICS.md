@@ -54,6 +54,33 @@ CSV appends `GPU %` and `Observed GPU seconds`, leaving unavailable cells blank.
 
 See [GPU validation](GPU_VALIDATION.md) for hardware evidence, reproduction and limits.
 
+## Apple Neural Engine
+
+The ANE view reads optional `DeviceProperties` from `H11ANEIn` and
+`H1xANELoadBalancer` in the IOKit service registry to show reported core and ANE
+device counts. It enumerates only `H1xANELoadBalancerDirectPathClient` descendants
+whose `IOUserClientCreator` identifies a PID. The process column and history count
+**currently open direct-path clients**. An open connection is not measured
+inference, ANE execution time, power, or utilization. Work routed indirectly
+through `aned` is not attributed to the requesting process. Zero visible clients
+does not prove that a process is not using ANE. Missing or unreadable driver data
+appears as **—**, not zero. Histories retain fifteen minutes and pause with the
+shared monitor.
+
+In Tree view, ANE connections sum across the current process family. A partial
+subtotal is marked **≥** when some members' client data is unavailable.
+
+Process JSON includes the optional `aneConnections` field. Process CSV adds
+`ANE direct connections`, leaving unavailable cells blank. Neither export
+records inferred utilization or time.
+
+These registry keys and class names are driver-defined observations, not a
+documented cross-generation telemetry contract. The collector uses public,
+read-only IOKit APIs without administrator privileges. Apple provides detailed
+model/ANE activity through Instruments. `powermetrics` can estimate ANE power on
+some Macs but requires root and does not provide this app with a public
+arbitrary-process ANE utilization API. See [live validation](ANE_VALIDATION.md).
+
 ## Refresh interval
 
 Monitoring defaults to one-second updates. Two- and five-second options remain available in the main window and menu-bar settings. Collection runs sequentially in the background; actual sample spacing includes collection time. Rates use measured elapsed time. Per-process network accounting retains its separate five-second refresh.

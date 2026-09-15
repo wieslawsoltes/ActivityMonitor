@@ -11,6 +11,7 @@ struct ProcessQuery: Equatable {
   static let filters = [
     "All processes", "My processes", "System processes",
     "Other users’ processes", "Active processes", "Inactive processes", "GPU processes",
+    "ANE connections",
     "Windowed processes", "Selected processes", "Applications",
   ]
   func matchesFilter(_ p: ProcessRow) -> Bool {
@@ -22,6 +23,7 @@ struct ProcessQuery: Equatable {
     case "Active processes": return p.accessible && p.cpuSampleAvailable != false && p.cpu > 0
     case "Inactive processes": return p.accessible && p.cpuSampleAvailable != false && p.cpu == 0
     case "GPU processes": return (p.gpuPercent ?? 0) > 0
+    case "ANE connections": return (p.aneConnections ?? 0) > 0
     case "Windowed processes", "Applications": return p.isApp
     case "Selected processes": return selected.contains(p.id)
     default: return true

@@ -16,6 +16,14 @@ enum ProcessColumns {
         .init(id: "pid", title: "PID", weight: 0.8),
         .init(id: "user", title: "User", weight: 1.1),
       ]
+    case .ane:
+      values = [
+        .init(id: "primary", title: "ANE connections", weight: 1.3),
+        .init(id: "cpu", title: "% CPU", weight: 0.8),
+        .init(id: "memory", title: "Memory", weight: 1.1),
+        .init(id: "pid", title: "PID", weight: 0.8),
+        .init(id: "user", title: "User", weight: 1.1),
+      ]
     case .cpu:
       values = [
         .init(id: "primary", title: "% CPU", weight: 0.85),
@@ -70,6 +78,7 @@ enum ProcessColumns {
     case .memory: return "memory"
     case .disk: return "written"
     case .gpu: return "gpu"
+    case .ane: return "aneConnections"
     case .network: return "received"
     }
   }
@@ -80,6 +89,7 @@ enum ProcessColumns {
     .init(id: "time", title: "CPU time", weight: 1.2),
     .init(id: "gpu", title: "% GPU", weight: 0.8),
     .init(id: "gpuTime", title: "GPU time", weight: 1.35),
+    .init(id: "aneConnections", title: "ANE connections", weight: 1.3),
     .init(id: "graphicsMemory", title: "Graphics charged", weight: 1.3),
     .init(id: "threads", title: "Threads", weight: 0.8),
     .init(id: "ports", title: "Ports", weight: 0.8),

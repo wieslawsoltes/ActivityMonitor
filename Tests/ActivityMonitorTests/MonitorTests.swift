@@ -104,7 +104,12 @@ final class MonitorTests: XCTestCase {
     row.networkSent = nil
     row.accessible = false
     row.ioAccessible = false
-    XCTAssertTrue(processCSV([row]).hasSuffix(",,,,,,"))
+    row.gpuPercent = nil
+    row.gpuTime = nil
+    row.aneConnections = nil
+    let values = processCSV([row]).components(separatedBy: "\n")[1]
+      .components(separatedBy: ",")
+    XCTAssertTrue(values.suffix(7).allSatisfy(\.isEmpty))
   }
 
   func testNetworkParserHandlesCommasDotsAndInvalidRows() {

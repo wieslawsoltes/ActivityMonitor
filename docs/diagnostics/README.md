@@ -86,7 +86,7 @@ Collection begins when enabled and refreshes at most every two seconds, subject 
 
 ## Menu bar pins
 
-Use the pin button to add a dedicated menu bar item for the process. Its popover has all six metrics, a chart, pause/resume, and **Open process monitor**. CPU is the default label; disk and network labels show read and receive rates. You can open the pin’s popover from **Process actions → Show menu bar monitor** as well.
+Use the pin button to add a dedicated menu bar item for the process. Its popover has all seven metrics, a chart, pause/resume, and **Open process monitor**. CPU is the default label; disk and network labels show read and receive rates. You can open the pin’s popover from **Process actions → Show menu bar monitor** as well.
 
 A pin retains the process session after its dialog and tool window close. Unpinning the last surface releases the session and cancels pending reports. Pins are specific to this running app session and are not restored across launches; they never silently attach to a new process with a reused PID. Exited processes retain their last snapshot until their final surface is closed or unpinned.
 

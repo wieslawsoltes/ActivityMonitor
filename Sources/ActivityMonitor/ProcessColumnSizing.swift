@@ -93,6 +93,7 @@ struct ProcessColumnLayout: Equatable {
   static func minimum(_ column: ProcessColumn, metric: Metric) -> CGFloat {
     switch ProcessColumns.canonical(column.id, metric: metric) {
     case "cpu", "gpu": return 78
+    case "aneConnections": return 145
     case "pid", "ports", "threads": return 60
     case "kind", "nap", "sandbox", "restricted", "sleep", "suddenTermination": return 60
     case "time", "gpuTime": return 86
@@ -118,6 +119,7 @@ struct ProcessColumnLayout: Equatable {
     let base: CGFloat
     switch key {
     case "cpu", "gpu": base = 78
+    case "aneConnections": base = 165
     case "threads", "ports", "pid": base = 64
     case "kind", "nap", "sandbox", "restricted": base = 70
     case "user": base = 116

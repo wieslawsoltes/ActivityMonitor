@@ -8,6 +8,7 @@ struct ProcessActivitySample: Codable {
   var cpu: Double?
   var memory: UInt64?
   var gpu: Double?
+  var aneConnections: Int? = nil
   var read: Double?
   var written: Double?
   var received: Double?
@@ -306,6 +307,7 @@ enum DiagnosticCommand {
       .init(
         date: date, cpu: current.accessible ? current.cpu : nil,
         memory: current.accessible ? current.memory : nil, gpu: current.gpuPercent,
+        aneConnections: current.aneConnections,
         read: ProcessActivitySample.rate(
           current.ioAccessible ? current.read : nil,
           before?.ioAccessible == true ? before?.read : nil, elapsed: elapsed),

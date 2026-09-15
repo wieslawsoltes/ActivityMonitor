@@ -10,6 +10,7 @@ enum Metric: String, CaseIterable, Identifiable {
   case disk = "Disk"
   case network = "Network"
   case gpu = "GPU"
+  case ane = "ANE"
   var id: String { rawValue }
   var icon: String {
     switch self {
@@ -19,6 +20,7 @@ enum Metric: String, CaseIterable, Identifiable {
     case .disk: return "internaldrive"
     case .network: return "wifi"
     case .gpu: return "square.3.layers.3d"
+    case .ane: return "brain"
     }
   }
   var subtitle: String {
@@ -29,6 +31,7 @@ enum Metric: String, CaseIterable, Identifiable {
     case .disk: return "Every read. Every write. In sight."
     case .network: return "Keep a pulse on what’s flowing."
     case .gpu: return "Graphics and compute, across your Mac."
+    case .ane: return "Neural Engine hardware and visible process connections."
     }
   }
 }
@@ -58,6 +61,7 @@ struct ProcessRow: Identifiable, Codable, Equatable {
   var executableName: String? = nil
   var gpuDevices: [GPUProcessDeviceSample]? = nil
   var gpuWaiting = false
+  var aneConnections: Int? = nil
   // Optional for compatibility with older saved snapshots and supplied process rows.
   var cpuSampleAvailable: Bool? = nil
   var memoryUsesResidentFallback: Bool? = nil
@@ -78,6 +82,7 @@ struct Snapshot {
   var processes: [ProcessRow]
   var system: AMSystem
   var gpuDevices: [GPUDeviceSample] = []
+  var ane = ANEHardwareSnapshot(available: false, engineCount: nil, coreCount: nil, connections: [:])
   var cpuCores = CPUCoreSample()
 }
 func bytes(_ value: UInt64) -> String {
@@ -111,6 +116,7 @@ final class Collector: @unchecked Sendable {
   var time = Date()
   private var users: [UInt32: String] = [:]
   private let gpuReader = GPUHardwareReader()
+  private let aneReader = ANEHardwareReader()
   private var gpuTracker = GPUProcessTracker()
   private var cpuTracker = CPUCoreTracker()
   private let detailsCollector = ProcessDetailsCollector()
@@ -123,6 +129,7 @@ final class Collector: @unchecked Sendable {
       uniqueKeysWithValues: buffer.prefix(Int(count)).map { ($0.pid, $0.start) })
     let network = networkSampler.collect(identities: identities, now: now)
     let gpu = gpuReader.read()
+    let ane = aneReader.read()
     let gpuProcesses = gpuTracker.update(
       gpu,
       identities: identities)
@@ -158,6 +165,7 @@ final class Collector: @unchecked Sendable {
       row.executableName = name
       row.cpuSampleAvailable = cpu != nil
       row.gpuDevices = gpuProcesses[p.pid]?.devices
+      row.aneConnections = ane.connectionsReadable ? ane.connections[p.pid] ?? 0 : nil
       row.memoryUsesResidentFallback = p.ioAccessible == 0 && p.accessible != 0
       row.details = detailsByPID[p.pid] ?? ProcessDetails()
       row.details.packetsIn = networkCounters?.packetsIn
@@ -171,7 +179,8 @@ final class Collector: @unchecked Sendable {
     var system = AMSystem()
     am_system(&system)
     return Snapshot(
-      processes: rows, system: system, gpuDevices: gpu.devices, cpuCores: cpuTracker.read())
+      processes: rows, system: system, gpuDevices: gpu.devices, ane: ane,
+      cpuCores: cpuTracker.read())
   }
 }
 @MainActor final class Monitor: ObservableObject {
@@ -180,6 +189,7 @@ final class Collector: @unchecked Sendable {
   @Published var system = AMSystem()
   @Published var histories: [Metric: [Point]] = [:]
   @Published var gpuDevices: [GPUDeviceSample] = []
+  @Published var ane = ANEHardwareSnapshot(available: false, engineCount: nil, coreCount: nil, connections: [:])
   @Published var gpuHistories: [UInt64: [GPUHistoryPoint]] = [:]
   @Published var selectedGPU: UInt64?
   var gpuDevice: GPUDeviceSample? { gpuDevices.first { $0.id == selectedGPU } ?? gpuDevices.first }
@@ -284,12 +294,14 @@ final class Collector: @unchecked Sendable {
     }
     cpuCores = cpuCoreHistory.series
     updateGPU(snapshot.gpuDevices, date: now)
+    ane = snapshot.ane
     let used = Double(system.active + system.wired + system.compressed)
     let values: [(Metric, Double, Double)] = [
       (.cpu, userCPU, systemCPU), (.memory, used, Double(system.pressure)),
       (.energy, rows.filter(\.isApp).reduce(0) { $0 + $1.cpu }, Double(system.battery)),
       (.disk, readRate, writeRate),
       (.network, receiveRate, sendRate),
+      (.ane, snapshot.ane.connectionCount.map(Double.init) ?? -1, 0),
     ]
     for (metric, a, b) in values {
       histories[metric, default: []].append(Point(date: now, a: a, b: b))
@@ -400,7 +412,7 @@ func processCSV(
   usage: [Int32: ProcessSubtreeUsage]? = nil
 ) -> String {
   var header =
-    "Name,PID,User,CPU %,CPU seconds,Memory bytes,Threads,Bytes read,Bytes written,Network bytes received,Network bytes sent,GPU %,Observed GPU seconds"
+    "Name,PID,User,CPU %,CPU seconds,Memory bytes,Threads,Bytes read,Bytes written,Network bytes received,Network bytes sent,GPU %,Observed GPU seconds,ANE direct connections"
   if includeHierarchy || usage != nil { header += ",Parent PID" }
   if usage != nil {
     header += ",Subtree processes,Subtree resident fallback processes"
@@ -418,6 +430,7 @@ func processCSV(
       p.ioAccessible ? String(p.read) : "", p.ioAccessible ? String(p.written) : "",
       p.networkReceived.map(String.init) ?? "", p.networkSent.map(String.init) ?? "",
       p.gpuPercent.map { String(format: "%.4f", $0) } ?? "", p.gpuTime.map { String($0) } ?? "",
+      p.aneConnections.map(String.init) ?? "",
     ]
     if includeHierarchy || usage != nil { cells.append(String(p.parent)) }
     if let usage {

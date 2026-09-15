@@ -40,6 +40,7 @@ final class ProcessTreeTests: XCTestCase {
       rows[i].written = UInt64(i * 300)
       rows[i].read = UInt64(1000 - i * 10)
       rows[i].gpuPercent = Double(i * 5)
+      rows[i].aneConnections = [100, 50, 10, 5, 20, 0][i]
       rows[i].networkReceived = UInt64(i * 500)
     }
     for metric in Metric.allCases {
@@ -54,7 +55,7 @@ final class ProcessTreeTests: XCTestCase {
         // even where its own counter is smaller. CPU grandchildren run in the
         // opposite order from the increasing byte/GPU fixtures.
         let branch: [Int32] = descending ? [20, 50] : [50, 20]
-        let cpuOrder = metric == .cpu || metric == .energy
+        let cpuOrder = metric == .cpu || metric == .energy || metric == .ane
         let children: [Int32] = (descending == cpuOrder) ? [30, 40] : [40, 30]
         XCTAssertEqual(snapshot.entries.filter { $0.parentID == 10 }.map(\.id), branch)
         XCTAssertEqual(snapshot.entries.filter { $0.parentID == 20 }.map(\.id), children)

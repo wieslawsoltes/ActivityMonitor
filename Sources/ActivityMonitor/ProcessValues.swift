@@ -47,6 +47,7 @@ enum ProcessValues {
     case .written: return p.ioAccessible ? .integer(p.written) : nil
     case .gpu: return p.gpuPercent.map(ProcessSortValue.number)
     case .gpuTime: return p.gpuTime.map(ProcessSortValue.number)
+    case .aneConnections: return p.aneConnections.map { .integer(UInt64($0)) }
     case .graphicsMemory: return p.details.graphics?.footprint.map(ProcessSortValue.integer)
     case .received: return p.networkReceived.map(ProcessSortValue.integer)
     case .sent: return p.networkSent.map(ProcessSortValue.integer)

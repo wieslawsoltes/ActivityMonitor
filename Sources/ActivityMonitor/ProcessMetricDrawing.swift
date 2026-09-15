@@ -45,7 +45,7 @@ enum ProcessMetricDrawing {
       defer { x += width }
       guard columns.contains(where: { $0.id == key }) else { continue }
       let primary = key == "primary" || metric == .network && key == "received"
-      let highlighted = key == "primary" && [.cpu, .memory, .gpu].contains(metric)
+      let highlighted = key == "primary" && [.cpu, .memory, .gpu, .ane].contains(metric)
       let user = key == "user"
       let text = ProcessCellText.truncate(
         ProcessValues.text(row, key: key, metric: metric, usage: usage),

@@ -10,6 +10,7 @@ enum ProcessUsageFixture {
     row.cpuTime = Double(units) * 2
     row.gpuPercent = Double(units) * 5
     row.gpuTime = Double(units) * 0.125
+    row.aneConnections = Int(units)
     row.threads = UInt32(units * 2)
     row.memory = units * 1024
     row.resident = units * 2048
@@ -45,6 +46,7 @@ enum ProcessUsageFixture {
     row.ioAccessible = false
     row.gpuPercent = nil
     row.gpuTime = nil
+    row.aneConnections = nil
     row.networkReceived = nil
     row.networkSent = nil
     row.details = ProcessDetails()
@@ -65,6 +67,7 @@ final class ProcessSubtreeUsageTests: XCTestCase {
       .packetsIn: .integer(341), .packetsOut: .integer(407), .ports: .integer(451),
       .privateMemory: .integer(473), .sharedMemory: .integer(517), .purgeable: .integer(583),
       .compressed: .integer(649), .wakeups: .number(2.75), .graphicsMemory: .integer(671),
+      .aneConnections: .integer(11),
     ]
     XCTAssertEqual(Set(expected.keys), Set(ProcessUsageMetric.allCases))
     XCTAssertEqual(total.processCount, 4)
@@ -82,6 +85,9 @@ final class ProcessSubtreeUsageTests: XCTestCase {
     XCTAssertEqual(ProcessValues.value(rows[0], key: "cpu", metric: .cpu), .number(10.25))
     XCTAssertEqual(
       ProcessValues.value(rows[0], key: "primary", metric: .cpu, usage: total), .number(112.75))
+    XCTAssertEqual(
+      ProcessValues.value(rows[0], key: "primary", metric: .ane, usage: total), .integer(11))
+    XCTAssertEqual(ProcessUsageExport(total).counters["aneConnections"]?.unit, "count")
     XCTAssertEqual(
       ProcessValues.value(rows[0], key: "pid", metric: .cpu, usage: total), .integer(10))
     XCTAssertEqual(

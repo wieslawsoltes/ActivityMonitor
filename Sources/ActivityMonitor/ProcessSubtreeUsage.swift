@@ -4,7 +4,7 @@ import Foundation
 enum ProcessUsageMetric: String, CaseIterable {
   case cpu, time, gpu, gpuTime, threads, memory, resident, read, written
   case received, sent, packetsIn, packetsOut, ports
-  case privateMemory, sharedMemory, purgeable, compressed, wakeups, graphicsMemory
+  case privateMemory, sharedMemory, purgeable, compressed, wakeups, graphicsMemory, aneConnections
 
   /// Stable dense offsets keep counter access free of hashing in the aggregation pass.
   var index: Int {
@@ -29,6 +29,7 @@ enum ProcessUsageMetric: String, CaseIterable {
     case .compressed: return 17
     case .wakeups: return 18
     case .graphicsMemory: return 19
+    case .aneConnections: return 20
     }
   }
 
@@ -45,6 +46,8 @@ enum ProcessUsageMetric: String, CaseIterable {
     case .gpu, .gpuTime:
       return
         "Sum of reported GPU execution across devices, using each process's observed counters. Concurrent work can exceed 100%."
+    case .aneConnections:
+      return "Sum of visible direct-path ANE clients for this process family; connections are not execution or utilization."
     case .memory:
       return
         "Sum of reported process memory footprints, with resident fallback where footprint is unavailable. Shared mappings can overlap; this is not unique physical RAM."

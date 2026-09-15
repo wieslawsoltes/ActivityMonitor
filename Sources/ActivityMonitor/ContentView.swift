@@ -67,6 +67,7 @@ struct ContentView: View {
   var heading: String {
     switch metric {
     case .gpu: return "GPU activity"
+    case .ane: return "Neural Engine connections"
     case .cpu: return "CPU activity"
     case .memory: return "Memory, in balance."
     case .energy: return "Every bit of energy."
@@ -77,6 +78,7 @@ struct ContentView: View {
   var subheading: String {
     switch metric {
     case .gpu: return "Graphics and compute, across your Mac."
+    case .ane: return "Visible direct-path connections, not ANE utilization."
     case .cpu: return "A little clarity. A lot of processing power."
     case .memory: return "Understand how your Mac makes room for everything."
     case .energy: return "A closer look at the apps powering your day."
@@ -218,7 +220,7 @@ struct ContentView: View {
         VStack(alignment: .leading, spacing: 18) {
           Text("A clearer view of your Mac").font(.title2.bold())
           Text(
-            "⌘1–6  Switch views\n⌘K  Search processes\nSpace  Pause or resume\n⌘⇧E  Export process CSV\nDouble-click a process to inspect it"
+            "⌘1–7  Switch views\n⌘K  Search processes\nSpace  Pause or resume\n⌘⇧E  Export process CSV\nDouble-click a process to inspect it"
           ).lineSpacing(8)
           Text(
             "CPU percentages are measured between samples. A process can exceed 100% when using multiple cores. Disk rates include readable processes; network counters aggregate non-loopback interfaces and can include VPN traffic. Process GPU rates use driver execution-time counters across all reporting devices and can exceed 100% when work overlaps. GPU time is observed during this session. Restricted or unsupported counters appear as —."
@@ -396,7 +398,7 @@ struct ContentView: View {
       if metric == .gpu {
         GPUDevicePicker(theme: theme)
       } else {
-        Text(metric.rawValue + " activity")
+        Text(metric == .ane ? "ANE connections" : metric.rawValue + " activity")
           .font(.system(size: 15, weight: .semibold)).tracking(-0.3).lineLimit(1)
       }
       DiagnosticInfoButton(title: heading, text: subheading, theme: theme)
@@ -429,6 +431,11 @@ struct ContentView: View {
           "Process GPU counters across all devices · \(monitor.rows.filter { $0.gpuPercent != nil }.count) reporting"
         )
         .foregroundStyle(theme.tertiary)
+      }
+      if metric == .ane {
+        Text("·")
+        Text("Direct ANE connections · execution and utilization unavailable")
+          .foregroundStyle(theme.tertiary)
       }
       if metric == .network || metric == .energy {
         Text("·")

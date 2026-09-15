@@ -109,7 +109,7 @@ extension ProcessUsageMetric {
     case .gpu: return "percent-of-reported-GPU-execution-time"
     case .time, .gpuTime: return "seconds"
     case .wakeups: return "wakeups-per-second"
-    case .threads, .ports, .packetsIn, .packetsOut: return "count"
+    case .threads, .ports, .packetsIn, .packetsOut, .aneConnections: return "count"
     default: return "bytes"
     }
   }
@@ -120,6 +120,7 @@ extension ProcessUsageMetric {
     case .time: return "CPU seconds"
     case .gpu: return "GPU %"
     case .gpuTime: return "Observed GPU seconds"
+    case .aneConnections: return "ANE direct connections"
     case .graphicsMemory: return "Graphics charged bytes"
     case .threads: return "Threads"
     case .memory: return "Memory bytes"

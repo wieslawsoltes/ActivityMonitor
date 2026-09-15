@@ -11,13 +11,13 @@ Keep an eye on performance, understand resource usage, and find the processes th
 ![macOS 14+](https://img.shields.io/badge/macOS-14%2B-20242c)
 ![Apple silicon and Intel](https://img.shields.io/badge/Apple_silicon_%26_Intel-supported-4086f7)
 
-**[Download for macOS](https://github.com/wieslawsoltes/ActivityMonitor/releases/latest)** · [Installation](#installation) · [Features](#six-views-one-clear-picture)
+**[Download for macOS](https://github.com/wieslawsoltes/ActivityMonitor/releases/latest)** · [Installation](#installation) · [Features](#seven-views-one-clear-picture)
 
 </div>
 
 ![Activity Monitor in light appearance](docs/screenshots/diagnostics/host-cpu-light.jpg)
 
-## Six views. One clear picture.
+## Seven views. One clear picture.
 
 | View | What you can see |
 | :--- | :--- |
@@ -27,10 +27,11 @@ Keep an eye on performance, understand resource usage, and find the processes th
 | **Disk** | Process reads and writes, transfer totals and current throughput. |
 | **Network** | Incoming and outgoing traffic, packet activity and per-process byte counts. |
 | **GPU** | Device utilization, renderer and tiler activity, GPU memory, and per-process GPU usage and observed time where the driver exposes counters. |
+| **ANE** | Neural Engine device/core counts and visible direct-path process connections, where the driver exposes them. Connection history does not measure utilization. |
 
 ## Find the detail that matters
 
-- **Find a process quickly.** Find apps by their macOS display names—including virtual machine names—or search by executable, PID or user. Choose from 28 column types in every view, with choices saved per view. Additional columns stay hidden until you enable them.
+- **Find a process quickly.** Find apps by their macOS display names—including virtual machine names—or search by executable, PID or user. Choose from 30 column types in every view, with choices saved per view. Additional columns stay hidden until you enable them.
 - **Personal layouts.** Default columns fit the available width without unnecessary horizontal scrolling. Resize header dividers, double-click to fit contents, and drag columns into your preferred order. Each view remembers its widths, order and visible columns. Select ranges or multiple processes and copy rows.
 - **Follow process families.** Switch between List and Tree in every view. Tree combines each process's usage with its descendants, with clear subtotal markers when counters are unavailable. Expand branches, sort by combined usage, and search while keeping parent context. Your display choice and open branches survive resizing and view changes. [Explore process trees](docs/process-tree.md).
 - **Look closer.** Open a process workspace with activity histories, threads, files, connections, ports, memory maps and diagnostic reports. Detach it into a floating tool window or pin the process to the menu bar.
@@ -38,11 +39,11 @@ Keep an eye on performance, understand resource usage, and find the processes th
 - **See every processor.** Switch from one CPU chart to individual logical processors. Inspect each history, filter performance or efficiency cores when identified, or explore individual threads in a process workspace and its menu-bar pin.
 - **Follow changes.** Switch between one-, five- and fifteen-minute histories, adjust the refresh interval or pause the view.
 - **Keep a record.** Export process data as CSV or JSON and save diagnostic reports.
-- **Stay informed.** Open all six views from your menu bar, with live charts, device details and the busiest processes.
+- **Stay informed.** Open all seven views from your menu bar, with live charts, device details and the busiest processes.
 
 ## A workspace for each process
 
-Right-click a process and choose **Process diagnostics…**. Follow its CPU, memory, energy, disk, network and GPU activity, then inspect individual threads, open files, listening ports and memory mappings. Memory and GPU pages include native counter charts and lists; memory shows the last reading and visible-range peak, and GPU lists device memory in use and allocated. The GPU page also charts per-process graphics memory charged to or excluded from physical footprint, including compressed balances, and lists per-device execution rates and sampled-client coverage. The GPU process table includes sortable Graphics charged bytes. Graphics ledgers are kernel accounting rather than a complete Metal allocation or VRAM inventory. Compare memory by protection, inspect virtual address ranges, and rank mapped images by resident or virtual size. Resize and reorder columns, filter entries, copy rows, and export the details you need.
+Right-click a process and choose **Process diagnostics…**. Follow its CPU, memory, energy, disk, network, GPU and ANE connections, then inspect individual threads, open files, listening ports and memory mappings. Memory and GPU pages include native counter charts and lists; memory shows the last reading and visible-range peak, and GPU lists device memory in use and allocated. The GPU page also charts per-process graphics memory charged to or excluded from physical footprint, including compressed balances, and lists per-device execution rates and sampled-client coverage. The GPU process table includes sortable Graphics charged bytes. Graphics ledgers are kernel accounting rather than a complete Metal allocation or VRAM inventory. Compare memory by protection, inspect virtual address ranges, and rank mapped images by resident or virtual size. Resize and reorder columns, filter entries, copy rows, and export the details you need.
 
 Keep several process monitors open as independent tool windows, float one above your workspace, or pin a process to the menu bar with your preferred live metric. Collect stack samples, virtual-memory reports, launch arguments and code-signing details without leaving the process workspace.
 
@@ -68,7 +69,7 @@ Choose light, dark or system appearance. The process inspector sits beside wide 
 
 *Screenshots show the running app with real system data.*
 
-[Explore all six views in both themes](docs/screenshots/README.md).
+[Explore all seven views in both themes](docs/screenshots/README.md).
 
 ## Fits your workspace
 
@@ -79,7 +80,7 @@ Keep the familiar three-panel overview at the default size, use a compact window
 | :---: | :---: |
 | ![Fitted process columns in light appearance](docs/screenshots/v1.4.1/cpu-light.jpg) | ![Fitted process columns in dark appearance](docs/screenshots/v1.4.1/cpu-dark.jpg) |
 
-The menu-bar monitor brings all six views into a compact popover. Change the history range, select a GPU, pause monitoring, or open a process in the main window. Both surfaces share the same live session.
+The menu-bar monitor brings all seven views into a compact popover. Change the history range, select a GPU, pause monitoring, or open a process in the main window. Both surfaces share the same live session.
 
 | Compact overview · Light | Compact overview · Dark |
 | :---: | :---: |
@@ -99,6 +100,19 @@ Track graphics and compute activity in the GPU view. Choose a device for its uti
 
 GPU availability depends on your Mac and its driver. Process counters cover all reporting devices; observed GPU time begins when monitoring starts. Device utilization and process GPU rates measure different things, so process percentages need not add up to the chart.
 
+## Neural Engine connections
+
+On Apple silicon Macs with readable ANE driver properties, the ANE view reports
+device/core counts and histories of currently open direct-path connections.
+Process rows and the inspector show visible connections for each PID. These are
+driver contexts, not measured inference activity. An app may use ANE indirectly
+without exposing a direct-path client. The view does not invent a utilization
+percentage or process execution time. [Measurement details and live validation](docs/ANE_VALIDATION.md).
+
+| Wide · Light | Wide · Dark |
+| :---: | :---: |
+| ![ANE monitoring in light appearance](docs/screenshots/ane/ane-wide-light.jpg) | ![ANE monitoring in dark appearance](docs/screenshots/ane/ane-wide-dark.jpg) |
+
 ## Smoother everyday monitoring
 
 Tabs respond across their full bounds. Clear hover, press and search-focus feedback makes controls easier to use, while a lighter process table reduces the work needed to switch views. Monitoring updates every second by default, with two- and five-second options. See the [profiling results](docs/performance/README.md) and [memory accounting notes](docs/performance/MEMORY.md).
@@ -111,7 +125,7 @@ Tabs respond across their full bounds. Clear hover, press and search-focus feedb
 
 Requires **macOS 14 or later**. The same download supports **Apple silicon and Intel**. A ZIP containing the complete app is also available. This app is separate from Apple’s built-in Activity Monitor.
 
-**First launch:** Current releases are ad-hoc signed and not Apple notarized. If macOS blocks a downloaded copy, attempt to open it, then use **System Settings → Privacy & Security → Open Anyway** if you trust the source. No security setting needs to be disabled.
+**First launch:** Version 1.9.1 and later releases are Developer ID signed and Apple notarized. Earlier ad-hoc signed releases may require **System Settings → Privacy & Security → Open Anyway** after an attempted launch.
 
 To uninstall, quit the app and move it from Applications to the Trash. See [installation notes](INSTALL.md) for details.
 
@@ -119,7 +133,7 @@ To uninstall, quit the app and move it from Applications to the Trash. See [inst
 
 | Shortcut | Action |
 | :--- | :--- |
-| **⌘1–⌘6** | Switch views |
+| **⌘1–⌘7** | Switch views |
 | **⌘K** | Search processes |
 | **⌘⇧T** | Switch between List and Tree |
 | **Space** | Pause or resume |
@@ -140,7 +154,7 @@ No accounts, telemetry or uploads. Reports and exports are saved to a location y
 
 The CPU overview and process list use 100% per logical processor. The total, breakdown, and chart scale to the full machine capacity: 400% for four logical processors or 1600% for sixteen.
 
-macOS restricts some process information; unavailable values appear as **—**. The Energy view shows **CPU workload**, not Apple’s proprietary Energy Impact score. GPU counters appear where the graphics driver exposes them. App Nap, Sudden Termination and Apple’s Energy Impact score display **—** when selected. [Column details and availability](docs/process-columns.md) explain each measurement. Disk totals cover readable processes; network totals can differ from individual process counters. Histories begin at launch and stay in memory for up to fifteen minutes.
+macOS restricts some process information; unavailable values appear as **—**. The Energy view shows **CPU workload**, not Apple’s proprietary Energy Impact score. GPU counters appear where the graphics driver exposes them. ANE connection counts are visible driver clients, not neural-compute activity or utilization. App Nap, Sudden Termination and Apple’s Energy Impact score display **—** when selected. [Column details and availability](docs/process-columns.md) explain each measurement. Disk totals cover readable processes; network totals can differ from individual process counters. Histories begin at launch and stay in memory for up to fifteen minutes.
 
 [Measurement details](docs/METRICS.md) · [Report an issue](https://github.com/wieslawsoltes/ActivityMonitor/issues) · [Development guide](DEVELOPMENT.md)
 

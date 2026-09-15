@@ -67,6 +67,10 @@ enum TelemetryData {
   ) -> ClosedRange<Double> {
     if metric == .cpu { return 0...CPUAccounting.capacity(processors: logicalProcessors) }
     if metric == .gpu { return 0...100 }
+    if metric == .ane {
+      let maximum = samples.map(\.value).max() ?? 0
+      return 0...max(2, ceil(maximum * 1.15))
+    }
     if metric == .memory { return 0...3 }
     let maximum = max(1, (samples.map { abs($0.value) }.max() ?? 1) * 1.15)
     return (metric == .disk || metric == .network ? -maximum : 0)...maximum
@@ -108,6 +112,8 @@ struct TelemetryChart: View {
     self.traces = TelemetryTrace.make(visible)
     if let cpuMaximum, metric == .cpu {
       self.domain = 0...max(100, cpuMaximum)
+    } else if perProcess && metric == .ane {
+      self.domain = TelemetryData.domain(visible, metric: metric)
     } else if perProcess {
       let maximum = max(1, (visible.map { abs($0.value) }.max() ?? 1) * 1.15)
       self.domain = (metric == .disk || metric == .network ? -maximum : 0)...maximum
@@ -133,6 +139,7 @@ struct TelemetryChart: View {
     case .memory: return perProcess ? "Memory" : "Pressure"
     case .energy: return "CPU workload"
     case .gpu: return perProcess ? "Process" : "Device"
+    case .ane: return perProcess ? "Process connections" : "Open connections"
     case .disk: return sample.series == 0 ? "Read" : "Write"
     case .network: return sample.series == 0 ? "In" : "Out"
     }
@@ -143,6 +150,7 @@ struct TelemetryChart: View {
       return perProcess
         ? bytes(UInt64(max(0, number))) : number >= 3 ? "High" : number >= 2 ? "Moderate" : "Normal"
     case .disk, .network: return bytes(UInt64(max(0, abs(number)))) + "/s"
+    case .ane: return "\(Int(max(0, number))) connections"
     default: return String(format: "%.1f%%", number)
     }
   }
@@ -275,6 +283,7 @@ struct TelemetryChart: View {
       return (number < 0 ? "−" : "") + String(format: "%.0f", Double(parts.0) ?? 0)
         + String(parts.1.prefix(1))
     }
+    if metric == .ane { return String(format: "%.0f", number) }
     return String(format: "%.0f%%", number)
   }
   private func step(_ delta: Int) {

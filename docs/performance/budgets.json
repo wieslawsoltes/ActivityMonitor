@@ -57,6 +57,9 @@
     "chart.GPU.15min": {
       "median_ms": 25
     },
+    "chart.ANE.15min": {
+      "median_ms": 25
+    },
     "diagnostics.workspace.15min": {
       "median_ms": 400
     },

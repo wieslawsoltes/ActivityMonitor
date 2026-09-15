@@ -314,13 +314,13 @@ final class ProcessDiagnosticsTests: XCTestCase {
     let now = Date()
     let history: [ProcessActivitySample] = [
       .init(
-        date: now, cpu: 350, memory: 1_000_000, gpu: 240, read: 50, written: 30, received: nil,
+        date: now, cpu: 350, memory: 1_000_000, gpu: 240, aneConnections: 2, read: 50, written: 30, received: nil,
         sent: 2, wakeups: 0),
       .init(
-        date: now.addingTimeInterval(1), cpu: nil, memory: nil, gpu: nil, read: nil, written: nil,
+        date: now.addingTimeInterval(1), cpu: nil, memory: nil, gpu: nil, aneConnections: nil, read: nil, written: nil,
         received: nil, sent: nil, wakeups: nil),
       .init(
-        date: now.addingTimeInterval(2), cpu: 400, memory: 2_000_000, gpu: 260, read: 60,
+        date: now.addingTimeInterval(2), cpu: 400, memory: 2_000_000, gpu: 260, aneConnections: 3, read: 60,
         written: 40, received: 20, sent: 3, wakeups: 0),
     ]
     for metric in Metric.allCases {

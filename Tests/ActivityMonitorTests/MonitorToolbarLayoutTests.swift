@@ -11,9 +11,10 @@ import XCTest
         MetricSwitcher(metric: .constant(.cpu), theme: .init(dark: false), controlHeight: 26))
     let tabWidth = ceil(tabs.fittingSize.width)
     XCTAssertFalse(MonitorToolbarLayout(width: 420).showsLabels)
-    XCTAssertTrue(MonitorToolbarLayout(width: 720).showsLabels)
+    XCTAssertFalse(MonitorToolbarLayout(width: 720).showsLabels)
+    XCTAssertTrue(MonitorToolbarLayout(width: tabWidth + 128 + 68).showsLabels)
     XCTAssertFalse(MonitorToolbarLayout(width: 720).showsExpandedActions)
-    XCTAssertTrue(MonitorToolbarLayout(width: 1000).showsExpandedActions)
+    XCTAssertTrue(MonitorToolbarLayout(width: tabWidth + 128 + 238 + 40).showsExpandedActions)
     for width: CGFloat in stride(from: 420, through: 1440, by: 10) {
       let layout = MonitorToolbarLayout(width: width)
       if layout.showsLabels {
