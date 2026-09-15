@@ -31,7 +31,7 @@ enum Metric: String, CaseIterable, Identifiable {
     case .disk: return "Every read. Every write. In sight."
     case .network: return "Keep a pulse on what’s flowing."
     case .gpu: return "Graphics and compute, across your Mac."
-    case .ane: return "Neural Engine hardware and visible process connections."
+    case .ane: return "On-demand Neural Engine activity and visible process connections."
     }
   }
 }
@@ -190,6 +190,7 @@ final class Collector: @unchecked Sendable {
   @Published var histories: [Metric: [Point]] = [:]
   @Published var gpuDevices: [GPUDeviceSample] = []
   @Published var ane = ANEHardwareSnapshot(available: false, engineCount: nil, coreCount: nil, connections: [:])
+  let aneProfiler = ANEProfileController()
   @Published var gpuHistories: [UInt64: [GPUHistoryPoint]] = [:]
   @Published var selectedGPU: UInt64?
   var gpuDevice: GPUDeviceSample? { gpuDevices.first { $0.id == selectedGPU } ?? gpuDevices.first }

@@ -30,7 +30,7 @@ The optional path signs with hardened runtime and a secure timestamp, notarizes 
 - `Sources/ActivityMonitor/ContentView.swift`: fixed dashboard shell, custom toolbar, theme controls and diagnostics.
 - `Design.swift`, `Overview.swift`, `ProcessTable.swift`, `Inspector.swift`, `Gallery.swift`: reference-matched visual components, charts and view gallery.
 - `GPUCollector.swift`, `GPUOverview.swift`: optional driver GPU counters, process-rate baselines, device histories and the GPU overview. See [hardware validation](docs/GPU_VALIDATION.md).
-- `ANECollector.swift`, `ANEOverview.swift`: read-only Neural Engine driver descriptors and direct-path process connections. See [hardware validation](docs/ANE_VALIDATION.md).
+- `ANECollector.swift`, `ANEOverview.swift`, `ANEProfiler.swift`: read-only Neural Engine driver descriptors and direct-path process connections, plus a user-triggered Instruments activity profile when Xcode is present. See [hardware validation](docs/ANE_VALIDATION.md).
 - `NetworkCollector.swift`: bounded nettop collection and CSV parsing.
 - `Sources/ActivityMonitor/ActivityMonitorApp.swift`: window, commands and optional menu-bar item.
 - `Tests/ActivityMonitorTests`: live collector, CPU accounting, export and disposable-process termination tests.

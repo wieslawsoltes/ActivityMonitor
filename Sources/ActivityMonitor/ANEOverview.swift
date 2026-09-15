@@ -20,28 +20,7 @@ struct ANEOverview: View {
     }
   }
   private var hero: some View {
-    VStack(alignment: .leading, spacing: 0) {
-      HStack(alignment: .top) {
-        VStack(alignment: .leading, spacing: 3) {
-          Text("Direct ANE connections").font(.system(size: 12)).foregroundStyle(theme.secondary)
-          HStack(alignment: .firstTextBaseline, spacing: 5) {
-            Text(ane.connectionCount.map(String.init) ?? "—")
-              .font(.system(size: dense ? 26 : 34, weight: .medium))
-              .foregroundStyle(theme.text)
-            Text(ane.connectionsReadable ? "open now" : "not available")
-              .font(.system(size: 11)).foregroundStyle(theme.secondary)
-          }
-        }
-        Spacer(minLength: 4)
-        Image(systemName: "brain").font(.system(size: 17)).foregroundStyle(theme.blue)
-      }
-      TelemetryChart(
-        samples: TelemetryData.samples(
-          points: monitor.histories[.ane] ?? [], metric: .ane,
-          maximumGap: max(10, monitor.interval * 2.5)),
-        metric: .ane, range: range, end: monitor.lastUpdate ?? Date(), theme: theme)
-        .padding(.top, dense ? 6 : 10)
-    }.monospacedDigit()
+    ANEProfileSummary(profiler: monitor.aneProfiler, theme: theme, dense: dense)
   }
   private var connections: some View {
     VStack(alignment: .leading, spacing: dense ? 8 : 15) {
@@ -60,7 +39,7 @@ struct ANEOverview: View {
       HStack {
         Text("Neural Engine hardware").font(.system(size: 12, weight: .medium))
         DiagnosticInfoButton(title: "Neural Engine hardware",
-          text: "ANE device and core counts come from optional driver registry properties. They are hardware descriptors, not capacity or utilization measurements. This collector does not report ANE power, execution time, or percentage; Apple provides detailed activity through Instruments, while powermetrics requires administrator privileges.", theme: theme)
+          text: "ANE device and core counts come from optional driver registry properties. They are hardware descriptors, not capacity or utilization measurements. A short Instruments profile can measure system-wide ANE activity intervals, but no live per-process or per-core ANE utilization API is available here. powermetrics requires administrator privileges.", theme: theme)
         Spacer()
         Image(systemName: "brain").foregroundStyle(theme.tertiary)
       }
@@ -79,5 +58,68 @@ struct ANEOverview: View {
       Spacer(minLength: 8)
       Text(value).monospacedDigit()
     }.font(.system(size: 11))
+  }
+}
+
+private struct ANEProfileSummary: View {
+  @ObservedObject var profiler: ANEProfileController
+  let theme: MonitorTheme
+  let dense: Bool
+
+  var body: some View {
+    VStack(alignment: .leading, spacing: dense ? 7 : 11) {
+      HStack(spacing: 5) {
+        Text("Neural Engine activity").font(.system(size: 12, weight: .medium))
+          .foregroundStyle(theme.secondary)
+        DiagnosticInfoButton(title: "Measured ANE activity",
+          text: "Capture records five seconds of system-wide Neural Engine activity using Xcode Instruments. The percentage is the share of recording time covered by ANE active intervals, not hardware utilization or core occupancy. Prediction timing is measured from ANE hardware intervals; events cannot be attributed to individual processes. This capture runs only when requested and removes its temporary trace afterward. Xcode is required and its export format may vary by version.", theme: theme)
+        Spacer(minLength: 4)
+        Button {
+          profiler.capture()
+        } label: {
+          Label("Capture 5 s", systemImage: "record.circle")
+            .font(.system(size: 11, weight: .medium))
+        }.buttonStyle(.bordered).controlSize(.small)
+          .disabled(profiler.isCapturing)
+          .accessibilityIdentifier("ane-capture-profile")
+      }
+      if profiler.isCapturing {
+        HStack(spacing: 8) {
+          ProgressView().controlSize(.small)
+          Text("Recording and analyzing…")
+            .font(.system(size: 12)).foregroundStyle(theme.secondary)
+        }.frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
+      } else if let result = profiler.result {
+        HStack(alignment: .firstTextBaseline, spacing: 5) {
+          Text(String(format: "%.1f", result.observedActivityPercent))
+            .font(.system(size: dense ? 26 : 34, weight: .medium))
+            .foregroundStyle(theme.text)
+          Text("% observed activity")
+            .font(.system(size: 11)).foregroundStyle(theme.secondary)
+        }.monospacedDigit()
+        HStack(spacing: dense ? 14 : 24) {
+          statistic("ANE predictions", "\(result.predictionCount)")
+          statistic("Mean interval", result.averagePredictionMilliseconds.map {
+            String(format: "%.2f ms", $0)
+          } ?? "—")
+          statistic("Recorded", String(format: "%.1f s", result.durationSeconds))
+        }
+        Text("System-wide sample · \(result.recordedAt.formatted(date: .omitted, time: .shortened))")
+          .font(.system(size: 10)).foregroundStyle(theme.tertiary)
+      } else {
+        Text("Capture a short ANE activity profile")
+          .font(.system(size: 13)).foregroundStyle(theme.secondary)
+          .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
+      }
+      if let error = profiler.error {
+        Text(error).font(.system(size: 10)).foregroundStyle(theme.coral).lineLimit(2)
+      }
+    }
+  }
+  private func statistic(_ label: String, _ value: String) -> some View {
+    VStack(alignment: .leading, spacing: 2) {
+      Text(value).font(.system(size: 11, weight: .medium)).foregroundStyle(theme.text)
+      Text(label).font(.system(size: 10)).foregroundStyle(theme.tertiary)
+    }.monospacedDigit()
   }
 }

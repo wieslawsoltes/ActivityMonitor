@@ -67,7 +67,7 @@ struct ContentView: View {
   var heading: String {
     switch metric {
     case .gpu: return "GPU activity"
-    case .ane: return "Neural Engine connections"
+    case .ane: return "Neural Engine activity"
     case .cpu: return "CPU activity"
     case .memory: return "Memory, in balance."
     case .energy: return "Every bit of energy."
@@ -78,7 +78,7 @@ struct ContentView: View {
   var subheading: String {
     switch metric {
     case .gpu: return "Graphics and compute, across your Mac."
-    case .ane: return "Visible direct-path connections, not ANE utilization."
+    case .ane: return "On-demand hardware activity and visible direct connections."
     case .cpu: return "A little clarity. A lot of processing power."
     case .memory: return "Understand how your Mac makes room for everything."
     case .energy: return "A closer look at the apps powering your day."
@@ -398,7 +398,7 @@ struct ContentView: View {
       if metric == .gpu {
         GPUDevicePicker(theme: theme)
       } else {
-        Text(metric == .ane ? "ANE connections" : metric.rawValue + " activity")
+        Text(metric == .ane ? "Neural Engine" : metric.rawValue + " activity")
           .font(.system(size: 15, weight: .semibold)).tracking(-0.3).lineLimit(1)
       }
       DiagnosticInfoButton(title: heading, text: subheading, theme: theme)
@@ -415,8 +415,10 @@ struct ContentView: View {
       .accessibilityElement(children: .ignore)
       .accessibilityLabel(monitor.paused ? "Monitoring paused" : "Live monitoring")
       .help(monitor.paused ? "Monitoring paused" : "Live monitoring")
-      HistoryRangePicker(range: $range, theme: theme)
-        .fixedSize()
+      if metric != .ane {
+        HistoryRangePicker(range: $range, theme: theme)
+          .fixedSize()
+      }
     }.frame(height: 42)
   }
   var statusbar: some View {
@@ -431,11 +433,6 @@ struct ContentView: View {
           "Process GPU counters across all devices · \(monitor.rows.filter { $0.gpuPercent != nil }.count) reporting"
         )
         .foregroundStyle(theme.tertiary)
-      }
-      if metric == .ane {
-        Text("·")
-        Text("Direct ANE connections · execution and utilization unavailable")
-          .foregroundStyle(theme.tertiary)
       }
       if metric == .network || metric == .energy {
         Text("·")
