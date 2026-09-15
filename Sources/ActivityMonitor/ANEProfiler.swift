@@ -47,6 +47,11 @@ enum ANETraceParser {
       forXPath: "/trace-toc/run[1]/info/summary/duration").first?.stringValue,
       let duration = Double(durationText), duration.isFinite, duration > 0
     else { throw ANEProfileError.unsupportedExport }
+    let endDateText = try tocDocument.nodes(
+      forXPath: "/trace-toc/run[1]/info/summary/end-date").first?.stringValue
+    let dateParser = ISO8601DateFormatter()
+    dateParser.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+    let sampleDate = endDateText.flatMap(dateParser.date(from:)) ?? recordedAt
 
     let document = try XMLDocument(data: intervals)
     guard let schema = try document.nodes(
@@ -112,7 +117,7 @@ enum ANETraceParser {
       mergedEnd = max(mergedEnd, end)
     }
     return ANEProfileResult(
-      recordedAt: recordedAt, durationSeconds: duration,
+      recordedAt: sampleDate, durationSeconds: duration,
       activeSeconds: activeSeconds, predictionCount: predictionDurations.count,
       averagePredictionMilliseconds: predictionDurations.isEmpty ? nil
         : predictionDurations.reduce(0, +) / Double(predictionDurations.count))

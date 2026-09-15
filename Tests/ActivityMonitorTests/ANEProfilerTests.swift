@@ -43,6 +43,23 @@ final class ANEProfilerTests: XCTestCase {
     XCTAssertNil(result.averagePredictionMilliseconds)
   }
 
+  func testResultUsesActualTraceEndTime() throws {
+    let datedTOC = Data("""
+      <trace-toc><run number="1"><info><summary>
+      <duration>2.0</duration><end-date>2026-09-15T10:02:42.974+02:00</end-date>
+      </summary></info></run></trace-toc>
+      """.utf8)
+    let xml = Data("""
+      <trace-query-result><node><schema name="ane-hw-intervals-internal"/>
+      </node></trace-query-result>
+      """.utf8)
+    let result = try ANETraceParser.parse(toc: datedTOC, intervals: xml)
+    let expected = ISO8601DateFormatter()
+    expected.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+    XCTAssertEqual(result.recordedAt,
+      try XCTUnwrap(expected.date(from: "2026-09-15T10:02:42.974+02:00")))
+  }
+
   func testUnknownInstrumentExportFailsClearly() {
     let xml = Data("""
       <trace-query-result><node><schema name="some-new-schema"/>
